@@ -2,9 +2,15 @@ import {
   ArrowClockwiseIcon,
   ArrowRightIcon,
   ArrowUpRightIcon,
+  BookOpenTextIcon,
+  CrosshairIcon,
+  FlagCheckeredIcon,
+  HouseLineIcon,
   LockSimpleIcon,
   MagnifyingGlassIcon,
   PlusIcon,
+  PlugsIcon,
+  PulseIcon,
   RadioIcon,
   ShieldCheckIcon,
   SlidersHorizontalIcon,
@@ -29,18 +35,21 @@ import {
   ArrowLink,
   Badge,
   Brand,
+  CreditsLink,
   Empty,
   Link,
   Modal,
   Notice,
 } from "./Primitives";
 import { RunDetail } from "./RunDetail";
+import "../workspace-v2.css";
 const navigation = [
-  { name: "Overview", path: "/app" },
-  { name: "Campaigns", path: "/app/campaigns" },
-  { name: "Findings", path: "/app/findings" },
-  { name: "Targets", path: "/app/targets" },
-  { name: "Integrations", path: "/app/integrations" },
+  { name: "Overview", path: "/app", icon: HouseLineIcon },
+  { name: "Campaigns", path: "/app/campaigns", icon: FlagCheckeredIcon },
+  { name: "Findings", path: "/app/findings", icon: PulseIcon },
+  { name: "Targets", path: "/app/targets", icon: CrosshairIcon },
+  { name: "Integrations", path: "/app/integrations", icon: PlugsIcon },
+  { name: "Docs", path: "/docs", icon: BookOpenTextIcon },
 ];
 
 function pendingFindings(runs: Run[]) {
@@ -113,23 +122,52 @@ function NavItem({
   setHovered,
   navigate,
 }: {
-  item: { name: string; path: string };
+  item: (typeof navigation)[number];
   current: string;
   count: number;
   setHovered: (path: string | null) => void;
   navigate: Navigate;
 }) {
+  const Icon = item.icon;
+  const content = (
+    <>
+      <Icon size={17} aria-hidden="true" />
+      <span className="nav-label">{item.name}</span>
+      {item.name === "Findings" && count > 0 && (
+        <span className="nav-count">{count}</span>
+      )}
+    </>
+  );
+  const hover = {
+    "data-path": item.path,
+    onMouseEnter: () => setHovered(item.path),
+    onFocus: () => setHovered(item.path),
+  };
+  if (item.path === "/docs")
+    return (
+      <a
+        href="/docs"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Docs opens in a new tab"
+        {...hover}
+      >
+        {content}
+        <ArrowUpRightIcon
+          className="docs-external"
+          size={12}
+          aria-hidden="true"
+        />
+      </a>
+    );
   return (
     <Link
       to={item.path}
       navigate={navigate}
-      data-path={item.path}
+      {...hover}
       aria-current={current === item.path ? "page" : undefined}
-      onMouseEnter={() => setHovered(item.path)}
-      onFocus={() => setHovered(item.path)}
     >
-      {item.name}
-      {item.name === "Findings" && count > 0 && <span>{count}</span>}
+      {content}
     </Link>
   );
 }
@@ -157,7 +195,7 @@ export function Workspace({
   const evidence = useEvidence(path);
   const page = pageFor(path);
   useEffect(() => {
-    document.title = `${evidence.runId ? "Evidence" : page} — Vouch`;
+    document.title = `${evidence.runId ? "Evidence" : page} · Vouch`;
   }, [page, evidence.runId]);
   async function action(endpoint: string, body: unknown, message: string) {
     try {
@@ -186,11 +224,18 @@ export function Workspace({
         <div className="workspace-identity">
           <span className="workspace-mode">
             <span className="status-dot" />
-            Synthetic workspace
+            Local sandbox
           </span>
-          <span className="avatar" title="Vouch workspace">
-            V
-          </span>
+          <a
+            className="avatar workspace-docs-shortcut"
+            href="/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Open documentation in a new tab"
+            title="Documentation"
+          >
+            <BookOpenTextIcon size={17} aria-hidden="true" />
+          </a>
         </div>
       </header>
       <main id="workspace-main" className="workspace-main">
@@ -271,12 +316,10 @@ function WorkspaceFooter({ navigate }: { navigate: Navigate }) {
     <footer className="workspace-footer">
       <span>
         <ShieldCheckIcon size={16} />
-        Evidence-led. Scope-bound. Vouch.
+        Local runs. Real evidence.
       </span>
-      <Link to="/credits" navigate={navigate}>
-        Credits & assets <ArrowUpRightIcon size={14} />
-      </Link>
-      <span>Synthetic workspace</span>
+      <CreditsLink navigate={navigate} />
+      <span>v0.1 · Synthetic workspace</span>
     </footer>
   );
 }
@@ -346,32 +389,27 @@ const headings: Record<
 > = {
   Overview: {
     title: "Your testing, in focus.",
-    description:
-      "Follow every conversation from caller claim to verified outcome.",
-    eyebrow: "VOUCH / WORKSPACE",
+    description: "Launch a test. Follow the evidence.",
+    eyebrow: "WORKSPACE / OVERVIEW",
   },
   Campaigns: {
-    title: "Intentional tests. Clear outcomes.",
-    description:
-      "Every campaign starts with an approved target and a bounded scope.",
+    title: "Every run has a purpose.",
+    description: "Approved targets. Bounded campaigns.",
     eyebrow: "WORKSPACE / CAMPAIGNS",
   },
   Findings: {
     title: "Let the evidence speak.",
-    description:
-      "Review what was attempted, what executed, and what actually changed.",
+    description: "From attempted action to verified outcome.",
     eyebrow: "WORKSPACE / FINDINGS",
   },
   Targets: {
-    title: "The right target. The right scope.",
-    description:
-      "Register only the agents you own or have explicit permission to test.",
+    title: "Know your test surface.",
+    description: "Register agents you own or are authorized to test.",
     eyebrow: "WORKSPACE / TARGETS",
   },
   Integrations: {
-    title: "Connected, with intention.",
-    description:
-      "Keep your caller, target transport, and backend evidence distinct.",
+    title: "Your runtime, connected.",
+    description: "Caller runtime and evidence sources, in one place.",
     eyebrow: "WORKSPACE / INTEGRATIONS",
   },
 };
@@ -445,7 +483,7 @@ function WorkspacePage({
         <span>{dateLabel()}</span>
         <span>
           <span className="status-dot" />
-          Local fixture mode · no live calls
+          Synthetic mode · no live calls
         </span>
       </div>
       <PageHeading page={page} setModal={setModal} />
@@ -470,24 +508,6 @@ function Metric({
       <strong>{String(value).padStart(2, "0")}</strong>
       <p>{note}</p>
     </div>
-  );
-}
-function FingerprintVisual() {
-  return (
-    <svg
-      width="74"
-      height="74"
-      viewBox="0 0 74 74"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M19 46V33a18 18 0 0 1 36 0v11M25 50V34a12 12 0 0 1 24 0v14M31 55V35a6 6 0 0 1 12 0v21M37 38v22M13 37v-4a24 24 0 0 1 48 0v8M19 53v5M55 51v5"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }
 function CampaignList({
@@ -589,6 +609,156 @@ function FindingRow({ run, open }: { run: Run; open: () => void }) {
     </button>
   );
 }
+function MissionIntro({
+  campaign,
+  version,
+  compact,
+}: {
+  campaign: () => void;
+  version: number;
+  compact: boolean;
+}) {
+  return (
+    <section
+      className={`mission-intro ${compact ? "is-compact" : ""}`}
+      aria-label="Start a baseline"
+    >
+      <div className="mission-copy">
+        <span className="mission-eyebrow">
+          <TerminalIcon size={15} aria-hidden="true" /> YOUR NEXT COMMIT, WITH
+          CONFIDENCE
+        </span>
+        <h2>
+          Test the boundary.
+          <br />
+          <span>Keep the proof.</span>
+        </h2>
+        <div className="mission-actions">
+          <button className="button primary" onClick={campaign}>
+            Run a baseline <ArrowUpRightIcon size={17} />
+          </button>
+          <a
+            className="mission-guide"
+            href="/docs/first-campaign"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Read the guide <BookOpenTextIcon size={16} />
+          </a>
+        </div>
+        <div className="mission-spec">
+          <span>POLICY v{version}</span>
+          <span>2 SCENARIOS</span>
+          <span>FICTIONAL ACCOUNTS</span>
+        </div>
+      </div>
+      <div className="mission-art" aria-hidden="true">
+        <span className="mission-orbit orbit-one" />
+        <span className="mission-orbit orbit-two" />
+        <img
+          src="/brand/vouch-scout.webp"
+          width="220"
+          height="220"
+          alt=""
+          draggable={false}
+          onDragStart={(event) => event.preventDefault()}
+        />
+        <span className="mission-coordinate coordinate-one">OBSERVE</span>
+        <span className="mission-coordinate coordinate-two">VERIFY</span>
+      </div>
+      <div className="mission-trace" aria-label="Policy sequence">
+        <code>identity.verified</code>
+        <ArrowRightIcon size={14} />
+        <code>change_contact_phone</code>
+        <ArrowRightIcon size={14} />
+        <code>backend.state</code>
+      </div>
+    </section>
+  );
+}
+function OverviewMetrics({ data }: { data: Overview }) {
+  const findings = data.runs.filter(
+    (run) => run.verdict?.outcome === "violation",
+  );
+  return (
+    <div className="metric-strip" aria-label="Workspace activity">
+      <Metric
+        title="Campaigns"
+        value={data.campaigns.length}
+        note="In this workspace"
+      />
+      <Metric
+        title="Conversations tested"
+        value={data.runs.filter((run) => run.status === "completed").length}
+        note="Completed runs"
+      />
+      <Metric
+        title="Candidate findings"
+        value={findings.length}
+        note={`${pendingFindings(data.runs).length} awaiting review`}
+        warning
+      />
+      <Metric
+        title="Backend verified"
+        value={
+          data.runs.filter((run) => run.verdict?.tier === "backend_verified")
+            .length
+        }
+        note="With state evidence"
+      />
+    </div>
+  );
+}
+function OverviewReviews({
+  runs,
+  openRun,
+  navigate,
+}: {
+  runs: Run[];
+  openRun: (id: string) => void;
+  navigate: Navigate;
+}) {
+  const pending = pendingFindings(runs);
+  return (
+    <section className="review-queue">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">HUMAN CHECKPOINT</span>
+          <h2>
+            Needs your review <span className="count">{pending.length}</span>
+          </h2>
+        </div>
+        <ArrowLink action={() => navigate("/app/findings")}>
+          All findings
+        </ArrowLink>
+      </div>
+      {pending.length ? (
+        pending
+          .slice(0, 3)
+          .map((run) => (
+            <FindingRow run={run} key={run.id} open={() => openRun(run.id)} />
+          ))
+      ) : (
+        <div className="quiet-empty">
+          <ShieldCheckIcon size={26} weight="light" />
+          <div>
+            <strong>All clear for now.</strong>
+            <p>No findings awaiting review.</p>
+          </div>
+        </div>
+      )}
+      <a
+        className="review-doc-link"
+        href="/docs/evidence"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <BookOpenTextIcon size={16} />
+        How to read the evidence <ArrowUpRightIcon size={15} />
+      </a>
+    </section>
+  );
+}
 function OverviewView({
   data,
   navigate,
@@ -596,41 +766,19 @@ function OverviewView({
   campaign,
   action,
 }: CommonView) {
-  const findings = data.runs.filter((r) => r.verdict?.outcome === "violation");
-  const pending = findings.filter((r) => r.review === "pending");
   return (
     <>
-      <div className="metric-strip" aria-label="Workspace activity">
-        <Metric
-          title="Campaigns"
-          value={data.campaigns.length}
-          note="Within your authorized scope"
-        />
-        <Metric
-          title="Conversations tested"
-          value={data.runs.filter((r) => r.status === "completed").length}
-          note="Attack scenarios + benign controls"
-        />
-        <Metric
-          title="Candidate findings"
-          value={findings.length}
-          note={`${pending.length} awaiting your review`}
-          warning
-        />
-        <Metric
-          title="Backend verified"
-          value={
-            data.runs.filter((r) => r.verdict?.tier === "backend_verified")
-              .length
-          }
-          note="Observed state, beyond spoken claims"
-        />
-      </div>
+      <MissionIntro
+        campaign={campaign}
+        version={data.policy.version}
+        compact={data.campaigns.length > 0}
+      />
+      <OverviewMetrics data={data} />
       <div className="overview-grid">
         <section className="activity-section">
           <div className="section-heading">
             <div>
-              <span className="eyebrow">THE LATEST SIGNAL</span>
+              <span className="eyebrow">LATEST ACTIVITY</span>
               <h2>Recent campaigns</h2>
             </div>
             <ArrowLink action={() => navigate("/app/campaigns")}>
@@ -638,7 +786,7 @@ function OverviewView({
             </ArrowLink>
           </div>
           <CampaignList
-            campaigns={data.campaigns.slice(0, 5)}
+            campaigns={data.campaigns.slice(0, 3)}
             runs={data.runs}
             openRun={openRun}
             create={campaign}
@@ -651,74 +799,15 @@ function OverviewView({
             }
           />
         </section>
-        <section className="baseline-section">
-          <span className="eyebrow">YOUR CURRENT BASELINE</span>
-          <span className="baseline-icon">
-            <FingerprintVisual />
-          </span>
-          <h2>
-            Verification.
-            <br />
-            <span>Before action.</span>
-          </h2>
-          <p>
-            The contact-change policy requires a trusted backend verification
-            event. A persuasive caller isn’t enough.
-          </p>
-          <div className="baseline-path">
-            <span>Caller claim</span>
-            <ArrowRightIcon size={15} />
-            <span>Identity event</span>
-            <ArrowRightIcon size={15} />
-            <span>Tool outcome</span>
-          </div>
-          <div className="baseline-footer">
-            <Badge tone="violet">Policy v1</Badge>
-            <button className="text-button" onClick={campaign}>
-              Test the boundary <ArrowUpRightIcon size={17} />
-            </button>
-          </div>
-        </section>
+        <OverviewReviews
+          runs={data.runs}
+          openRun={openRun}
+          navigate={navigate}
+        />
       </div>
-      <section className="review-queue">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">A HUMAN IN THE LOOP</span>
-            <h2>
-              Ready for a closer look{" "}
-              <span className="count">{pending.length}</span>
-            </h2>
-          </div>
-          <ArrowLink action={() => navigate("/app/findings")}>
-            All findings
-          </ArrowLink>
-        </div>
-        {pending.length ? (
-          pending
-            .slice(0, 3)
-            .map((r) => (
-              <FindingRow run={r} key={r.id} open={() => openRun(r.id)} />
-            ))
-        ) : (
-          <div className="quiet-empty">
-            <ShieldCheckIcon size={23} weight="light" />
-            <div>
-              <strong>No findings awaiting review.</strong>
-              <p>
-                {findings.length
-                  ? "Your existing candidates have a recorded reviewer decision."
-                  : "Run a campaign to start collecting evidence."}
-              </p>
-            </div>
-          </div>
-        )}
-      </section>
       <div className="fixture-footnote">
-        <TerminalIcon size={17} />
-        <p>
-          A proving ground, without the risk. Fixture runs use fictional
-          identities and an instrumented local target. No real calls or costs.
-        </p>
+        <TerminalIcon size={16} />
+        <p>Synthetic runs only. No live calls or provider charges.</p>
       </div>
     </>
   );
@@ -832,7 +921,7 @@ function TargetsView({
         <h2>
           Approved targets <span className="count">{data.targets.length}</span>
         </h2>
-        <span className="muted small">Authorization required, always.</span>
+        <span className="muted small">Approved targets only</span>
       </div>
       {data.targets.length ? (
         data.targets.map((t) => (
@@ -851,7 +940,7 @@ function TargetsView({
               </div>
               <p>
                 {t.transport === "fixture"
-                  ? "Fictional accounts. Instrumented contact-change tool. Full backend visibility."
+                  ? "Fictional accounts with instrumented backend evidence."
                   : t.phone}
               </p>
               <details>
@@ -880,7 +969,7 @@ function TargetsView({
       ) : (
         <Empty
           title="Start with an approved target."
-          text="Use the local synthetic support agent, or register an operator-allowlisted number for future integration work."
+          text="Add a synthetic agent or an approved phone number."
           button="Register target"
           action={() => setModal({ type: "target" })}
         />
@@ -910,10 +999,7 @@ function IntegrationsView({
             <h2>Bolna</h2>
             <Badge tone="amber">Live unverified</Badge>
           </div>
-          <p>
-            Adversarial spoken conversations through the hosted voice-agent
-            runtime.
-          </p>
+          <p>Hosted voice runtime. Live dispatch is not yet available.</p>
           <dl>
             <div>
               <dt>Credentials</dt>
@@ -961,10 +1047,7 @@ function IntegrationsView({
             <h2>Synthetic fixture</h2>
             <Badge tone="violet">Available locally</Badge>
           </div>
-          <p>
-            The complete evidence workflow with a deterministic caller, a mock
-            target, and a real PostgreSQL backend.
-          </p>
+          <p>Deterministic calls with real backend state checks.</p>
           <dl>
             <div>
               <dt>Caller</dt>
@@ -993,14 +1076,13 @@ function IntegrationsView({
         <div>
           <h3>Before going live.</h3>
           <p>
-            Set BOLNA_API_KEY and BOLNA_AGENT_ID securely in environment
-            settings. Only register operator-allowlisted numbers with an
-            authorization reference. Provider duration, cancellation and budget
-            controls still need implementation and validation.
+            Live calls require provider controls for duration, cancellation and
+            budget. Keep credentials in the server environment and use only
+            approved targets.
           </p>
           <p>
-            This unauthenticated local workspace must stay on loopback until
-            authentication and tenant isolation are added.
+            Local access only until authentication and tenant isolation are
+            added.
           </p>
         </div>
       </div>

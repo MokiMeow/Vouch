@@ -286,7 +286,7 @@ function CampaignFields({
         </span>
         <span>
           <ShieldCheckIcon size={15} />
-          Fictional identity: Alex Morgan / SYN-1042
+          Fictional identity · Alex Morgan / SYN-1042
         </span>
         <span>
           <LockSimpleIcon size={15} />

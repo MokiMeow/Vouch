@@ -8,17 +8,17 @@ Applied [ub-mode](https://github.com/unclebob/ub-mode) from the exact revision r
 | ------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | TypeScript and production build | Passed                        | Strict types, unused-local/parameter checks, minified Vite production build                                                                                                                 |
 | Unit tests                      | 60 passed                     | Policy/scope behavior, digest stability/integrity and Bolna contracts through an isolated mock transport; no live call                                                                      |
-| Integration checks              | 158 passed                    | Real PostgreSQL and isolated API; queue recovery, digest verification, unsupported policy rejection, authenticated telemetry and public-file boundaries                                     |
+| Integration checks              | 168 passed                    | Real PostgreSQL and isolated API; queue recovery, digest verification, telemetry, public-file boundaries and the explicitly published Docs/assets routes                                    |
 | Browser workflow                | Passed                        | Campaign → worker → evidence → review → export/rerun, plus stale-response, overlap, retry, real timeout, cached-evidence and compatibility regressions                                      |
-| Responsive checks               | Passed                        | Every workspace tab at 320, 390, 768, 1440 and 2560px; evidence additionally at 360 and 1920px; separate landing hero clipping checks                                                       |
-| Automated accessibility         | Passed                        | axe WCAG A/AA checks on landing, overview, evidence, and mobile integrations; reduced-motion handling and keyboard evidence tabs exercised                                                  |
+| Responsive checks               | Passed                        | Every workspace tab and all seven Docs guides at 320, 390, 768, 1440 and 2560px; evidence additionally at 360 and 1920px; separate landing hero clipping checks                             |
+| Automated accessibility         | Passed                        | axe WCAG A/AA on landing, overview, evidence, mobile integrations and all Docs chapters; named landmarks, keyboard tables/tabs and reduced motion                                           |
 | Crapper                         | Passed                        | Every analysed production function has CRAP below 10; maximum reported score 9.0                                                                                                            |
 | Dryer                           | Passed                        | No duplicate candidates at similarity threshold 0.8                                                                                                                                         |
 | Mutator                         | Passed for executed mutations | 74 executed core mutations and 11 configuration mutations killed, zero survivors. One LCOV-omitted default-parameter mutant was independently killed in an isolated baseline-verified clone |
 | Dependency audit                | Passed                        | No known vulnerabilities reported by pnpm at this run                                                                                                                                       |
 | Secret handling                 | Verified locally              | `.env` is Git-ignored and mode 0600; actual configured secret values are absent from staged source and built assets                                                                         |
 
-Coverage is measured, not inferred from a successful UI render. The unit suite covers 97%+ of branches; API integration coverage is approximately 94% statements / 81% branches. The public-file boundary has 100% statement and branch coverage from real HTTP tests. Browser source-mapped coverage is approximately 91% branches / 83% functions; the extracted request lifecycle has 95% branch coverage. These are separate scopes, not a claim of universal 100% coverage. See the [performance audit](performance-audit.md) for measured payloads, request paths and browser-race reproduction.
+Coverage is measured, not inferred from a successful UI render. The unit suite covers 97%+ of branches; API integration coverage is approximately 94% statements / 81% branches. The public-file boundary has 100% statement and branch coverage from real HTTP tests. Browser source-mapped coverage is approximately 90% branches / 83% functions, including the added documentation surface; the extracted request lifecycle has 95% branch coverage. These are separate scopes, not universal 100% coverage. See the [performance audit](performance-audit.md) for measured payloads, request paths and browser-race reproduction.
 
 An initial minified-bundle coverage result was implausible. It was discarded. The browser runner now checkpoints before full navigations and merges actual V8 function ranges against an unminified coverage build. Normal production builds retain minification and omit source maps. Local coverage builds create maps on disk for analysis; HTTP access to maps is rejected in either mode. `scripts/report-browser-coverage.cjs` generates the mapped report.
 
@@ -42,6 +42,7 @@ An initial minified-bundle coverage result was implausible. It was discarded. Th
 16. **Reordered evidence could overstate backend proof.** The evaluator now orders its copied backend events by authoritative sequence before correlating actions. A failing test showed a later action's state being attached to an earlier violation when an input array was shuffled; it now remains unknown for that earlier action.
 17. **Input and evidence-source mismatches.** Fractional millisecond values no longer reach PostgreSQL's integer column. External evidence cannot silently reinterpret an unsupported captured policy. Provider records no longer receive fixture/PostgreSQL-only labels in the UI, and captured digest mismatches are visible.
 18. **Runtime settings could fail inconsistently.** The Vite development proxy now follows configured API host/port; a nondefault configuration was checked. Database connections and statements have bounded waits. Request lifecycle and digest presentation were split after the complexity gate flagged them; all analysed production functions now score below 10.
+19. **Documentation and visual navigation gaps.** Added a dedicated seven-guide Docs surface with accurate public product content, functional code copying and failure feedback, search, table of contents and mobile navigation. Fixed the first rendered contrast failures, made the mobile Docs shortcut persistently visible, wrapped mobile tables and limited reading width. Generated original non-draggable mascots and retained OpenCode's inspected MIT license. Shared footer credits and small Docs functions satisfy the duplication/complexity gates without changing the actual workflow.
 
 The HTTP boundary does not change GitHub repository visibility. Committed documentation is available to anyone who can read the repository. There is still no production user/session gate for workspace data: the server remains restricted to loopback, and public deployment requires authentication and authorization first.
 
@@ -62,6 +63,7 @@ pnpm test
 pnpm test:integration
 pnpm test:browser
 pnpm test:browser:requests
+pnpm test:browser:design
 pnpm audit
 ```
 
@@ -71,6 +73,7 @@ The browser checks require the API and worker to be running and Chromium install
 VOUCH_COVERAGE=1 pnpm build
 VOUCH_COVERAGE=1 pnpm test:browser
 VOUCH_COVERAGE=1 pnpm test:browser:requests
+VOUCH_COVERAGE=1 pnpm test:browser:design
 node scripts/report-browser-coverage.cjs
 # Restore the production build afterward:
 pnpm build

@@ -6,7 +6,7 @@ Vouch tests whether voice agents can be persuaded to skip business-policy checks
 
 **Live status:** no live call has been verified. The Bolna adapter implements read-only agent/execution retrieval and a capability contract. Outbound dispatch deliberately fails closed: hard duration, cancellation, and monetary enforcement still need implementation and live validation. Credentials alone do not enable dispatch. PSTN registration is supported for operator-allowlisted numbers; WebSocket, SIP, Cartesia, and additional runtimes are not implemented.
 
-The redesigned landing page is served at `/`; enter the workspace at `/app`. It uses original generated branding, Phosphor icons, self-hosted Geist, responsive layouts, and reduced-motion-aware interactions. See [design notes](docs/design-redesign.md), [flow diagram](docs/application-flow.md), [audit report](docs/repository-audit.md), and [action log](docs/action-log.md).
+The landing page is served at `/`; enter the workspace at `/app`. Its developer-focused interface uses original non-draggable scout mascots, licensed OpenCode neutral-token references, Phosphor icons and self-hosted Geist. A dedicated `/docs` surface provides seven searchable guides with copyable setup commands, evidence explanations, API details and troubleshooting. Docs opens in a new tab from the workspace. See [design notes](docs/design-redesign.md), [flow diagram](docs/application-flow.md), [audit report](docs/repository-audit.md), and [action log](docs/action-log.md).
 
 ## Run
 
@@ -48,6 +48,7 @@ pnpm test:integration
 # API and worker must be running, and the web build must exist:
 pnpm test:browser
 pnpm test:browser:requests
+pnpm test:browser:design
 pnpm audit
 ```
 
@@ -55,6 +56,7 @@ pnpm audit
 - Integration tests create and reset only a dedicated database whose name ends in `_test` (`vouch_test` by default). They start an isolated API, exercise the real worker and PostgreSQL, check exports/reviews, reject evidence injection, and verify call bounds, stopping, scheduling, and concurrent workers. Override with `TEST_DATABASE_URL`.
 - Browser checks use installed Chromium (`CHROMIUM_PATH` defaults to `/usr/bin/chromium`). They create synthetic campaigns in the running development database and exercise creation, worker outcomes, evidence tabs, review, file download, rerun bounds, mobile overflow, and integration status. Screenshots go to ignored `artifacts/`. They do not place live calls.
 - The separate request-regression browser suite uses intercepted, non-persisted records to verify late responses, overlapping polling, retry, a real 15-second timeout, hidden-tab behavior, cached evidence during refresh failures, and operation without newer `AbortSignal` helpers. See the [performance audit and call graph](docs/performance-audit.md).
+- The design browser suite checks all seven documentation guides, chapter search, copy success/denial, mobile menus, new-tab navigation, image-drag prevention, accessibility and responsive layouts. Documentation contains public product guidance; raw repository notes and audit files remain blocked by the HTTP boundary.
 
 ## Evidence and runtime boundaries
 

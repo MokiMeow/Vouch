@@ -1,0 +1,156 @@
+/* Neutral surfaces and scale adapted from OpenCode's MIT theme at
+   8d083cb64d165b4784e4bddebdd8aad30b3fe50b. See /licenses/opencode-MIT.txt.
+   Vouch retains its own typography, accent palette, artwork and layouts. */
+:root {
+  --background-base: #f8f8f8;
+  --background-strong: #fcfcfc;
+  --surface-float-base: #161616;
+  --font-size-base: 14px;
+  --font-size-large: 16px;
+  --spacing: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --vouch-ink: #171717;
+  --vouch-muted: #65676b;
+  --vouch-rule: #dedfdf;
+  --vouch-accent: #6a52b5;
+  --ink: var(--vouch-ink);
+  --muted: var(--vouch-muted);
+  --line: var(--vouch-rule);
+  --violet: var(--vouch-accent);
+  --lilac: #eeeaf8;
+  color: var(--ink);
+  background: var(--background-base);
+}
+body {
+  background: var(--background-base);
+}
+img {
+  max-width: 100%;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+::selection {
+  background: #ded6f4;
+  color: #171717;
+}
+.button {
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.button.primary {
+  background: #171717;
+  border-color: #171717;
+  color: #fcfcfc;
+}
+.button.secondary {
+  background: #fcfcfc;
+  border-color: #dedfdf;
+  color: #171717;
+}
+.button.ghost {
+  color: #171717;
+  border-color: #dedfdf;
+}
+.button:hover {
+  box-shadow: 0 4px 12px #1717170b;
+}
+.badge {
+  color: #45464b;
+  border-color: #dedfdf;
+  background: #f1f1f1;
+}
+.badge.violet {
+  color: #58418f;
+  background: #eeeaf8;
+  border-color: #dbd3ef;
+}
+.badge.amber,
+.badge.red {
+  color: #89412e;
+  background: #fbf0eb;
+  border-color: #efd9cf;
+}
+.modal {
+  background: #fcfcfc;
+  color: var(--ink);
+  border: 1px solid #dedfdf;
+  border-radius: 20px;
+}
+.modal-heading h2 {
+  font-weight: 500;
+}
+.setup-form {
+  color: #171717;
+}
+.setup-form input,
+.setup-form select,
+.setup-form textarea {
+  color: #171717;
+  background: #f8f8f8;
+  border-color: #d5d6d8;
+  border-radius: 8px;
+}
+.setup-form .scope-terms {
+  background: #f1eff6;
+  border-radius: 10px;
+}
+.setup-form .form-intro {
+  font-size: 14px;
+  color: #65676b;
+}
+.run-detail {
+  color: var(--ink);
+}
+.run-detail .detail-heading h1 {
+  font-size: clamp(30px, 3.2vw, 46px);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+}
+.run-detail .verdict-line {
+  background: #fcfcfc;
+}
+.run-detail .audio-player {
+  background: #efedf5;
+  border-radius: 14px;
+}
+.run-detail .audio-play {
+  background: #161616;
+}
+.run-detail .evidence-panel {
+  color: #29292d;
+}
+.run-detail .raw-events {
+  background: #161616;
+  color: #ececee;
+  border-radius: 12px;
+}
+.run-detail .provenance > span {
+  font-size: 12px;
+}
+.run-detail .provenance > span > b {
+  font-weight: 500;
+  margin-right: 9px;
+}
+.run-detail .review-section textarea {
+  background: #fcfcfc;
+  color: #171717;
+  border-color: #d5d6d8;
+  border-radius: 12px;
+}
+.run-detail .policy-precondition,
+.run-detail .policy-checks {
+  color: #36353b;
+}
+.run-detail .tabs button.selected {
+  color: #58418f;
+  border-color: #6a52b5;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}

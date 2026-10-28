@@ -300,7 +300,7 @@ try {
     .waitFor();
   await page
     .getByText(
-      "Configuration mismatch: this record differs from its captured digest",
+      "Configuration mismatch. This record differs from its captured digest",
       { exact: true },
     )
     .waitFor();

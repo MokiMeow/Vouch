@@ -1,0 +1,1378 @@
+body .workspace-app {
+  --workspace-paper: var(--background-strong);
+  --workspace-ink: var(--vouch-ink);
+  --workspace-muted: var(--vouch-muted);
+  --workspace-rule: var(--vouch-rule);
+  --line: var(--workspace-rule);
+  --ink: var(--workspace-ink);
+  --muted: var(--workspace-muted);
+  min-height: 100vh;
+  color: var(--workspace-ink);
+  background: #f8f8f8;
+}
+body .workspace-app .workspace-atmosphere {
+  display: none;
+}
+body .workspace-app .workspace-header {
+  position: sticky;
+  inset: 0 0 auto;
+  z-index: 70;
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(140px, 1fr);
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+  min-height: 85px;
+  margin: 0;
+  padding: 18px 36px;
+  border: 0;
+  border-bottom: 1px solid var(--workspace-rule);
+  border-radius: 0;
+  background: #fcfcfcf0;
+  box-shadow: none;
+  backdrop-filter: blur(18px);
+}
+body .workspace-app .workspace-header .brand {
+  font-size: 28px;
+  color: var(--workspace-ink);
+}
+body .workspace-app .workspace-nav {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px;
+  border-radius: 11px;
+  background: #eeefed;
+  white-space: nowrap;
+  isolation: isolate;
+}
+body .workspace-app .workspace-nav > a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  margin: 0;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #626469;
+  font-size: 13px;
+  font-weight: 450;
+  line-height: 1.3;
+  transition: color 180ms ease;
+  z-index: 1;
+}
+body .workspace-app .workspace-nav > a:hover,
+body .workspace-app .workspace-nav > a[aria-current="page"] {
+  color: var(--workspace-ink);
+}
+body .workspace-app .workspace-nav > a > .nav-label {
+  display: inline;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+body .workspace-app .nav-glider {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  height: auto;
+  border: 1px solid #dfe0dd;
+  border-radius: 8px;
+  background: #fcfcfc;
+  box-shadow: 0 1px 3px #17181b06;
+  transition:
+    transform 260ms var(--ease),
+    width 260ms var(--ease);
+  z-index: 0;
+}
+body .workspace-app .workspace-nav > a > .nav-count {
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0 4px;
+  border-radius: 5px;
+  background: #dedbd5;
+  color: #454347;
+  font:
+    10px "Geist Mono",
+    monospace;
+}
+body .workspace-app .workspace-identity {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+body .workspace-app .workspace-mode {
+  gap: 7px;
+  color: var(--workspace-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+body .workspace-app .avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--workspace-rule);
+  border-radius: 9px;
+  background: var(--workspace-paper);
+  color: var(--workspace-ink);
+}
+body .workspace-app .workspace-main {
+  width: min(1600px, calc(100% - 96px));
+  max-width: none;
+  margin: 0 auto;
+  padding: 30px 0 0;
+}
+body .workspace-app .workspace-date {
+  margin: 0 0 25px;
+  color: var(--workspace-muted);
+  font:
+    10px "Geist Mono",
+    monospace;
+  letter-spacing: 0.04em;
+}
+body .workspace-app .workspace-date > span:last-child {
+  font-size: 10px;
+}
+body .workspace-app .page-heading {
+  align-items: center;
+  gap: 24px;
+  margin: 0 0 32px;
+}
+body .workspace-app .page-heading .eyebrow {
+  margin-bottom: 10px;
+  color: var(--workspace-muted);
+  font:
+    10px "Geist Mono",
+    monospace;
+  letter-spacing: 0.09em;
+}
+body .workspace-app .page-heading h1 {
+  max-width: 900px;
+  color: var(--workspace-ink);
+  font-size: clamp(32px, 3.2vw, 48px);
+  font-weight: 470;
+  letter-spacing: -0.055em;
+  line-height: 1.12;
+}
+body .workspace-app .page-heading p {
+  max-width: 640px;
+  margin-top: 12px;
+  color: var(--workspace-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+body .workspace-app .button {
+  gap: 9px;
+  min-height: 43px;
+  padding: 11px 16px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 500;
+}
+body .workspace-app .button.primary {
+  border: 1px solid #17181b;
+  background: #17181b;
+  color: #fcfcfc;
+  box-shadow: 0 2px 2px #17181b08;
+}
+body .workspace-app .button.primary:hover {
+  border-color: #3e3e46;
+  background: #35353c;
+  box-shadow: 0 3px 12px #17181b12;
+}
+body .workspace-app .button.secondary {
+  border: 1px solid var(--workspace-rule);
+  background: #fcfcfc;
+  color: var(--workspace-ink);
+}
+body .workspace-app .button.secondary:hover {
+  border-color: #b8b9bc;
+  background: #f1f1ef;
+}
+body .workspace-app .text-button,
+body .workspace-app .back-button,
+body .workspace-app .text-link {
+  color: var(--workspace-ink);
+  font-size: 13px;
+}
+body .workspace-app .mission-intro {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  overflow: hidden;
+  min-height: 280px;
+  padding: 32px 38px 0;
+  border: 1px solid #e1e2de;
+  border-radius: 18px;
+  background-color: #f0f1ee;
+  background-image:
+    linear-gradient(90deg, #f0f1ee 42%, transparent),
+    linear-gradient(#17181b05 1px, transparent 1px),
+    linear-gradient(90deg, #17181b05 1px, transparent 1px);
+  background-size:
+    auto,
+    28px 28px,
+    28px 28px;
+}
+body .workspace-app .mission-copy {
+  position: relative;
+  min-width: 0;
+  z-index: 2;
+}
+body .workspace-app .mission-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #5b5f60;
+  font:
+    10px "Geist Mono",
+    monospace;
+  letter-spacing: 0.07em;
+  line-height: 1.7;
+}
+body .workspace-app .mission-intro h2 {
+  margin: 16px 0 22px;
+  color: var(--workspace-ink);
+  font-size: clamp(31px, 3.2vw, 44px);
+  font-weight: 450;
+  line-height: 1.08;
+  letter-spacing: -0.055em;
+}
+body .workspace-app .mission-intro h2 span {
+  color: #737773;
+}
+body .workspace-app .mission-actions {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+body .workspace-app .mission-guide {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  color: #484c4a;
+  font-size: 13px;
+  transition: color 180ms;
+}
+body .workspace-app .mission-guide:hover,
+body .workspace-app .review-doc-link:hover {
+  color: #6850ae;
+}
+body .workspace-app .mission-spec {
+  display: flex;
+  gap: 19px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+  padding-bottom: 23px;
+  color: #656965;
+  font:
+    9px "Geist Mono",
+    monospace;
+  letter-spacing: 0.055em;
+}
+body .workspace-app .mission-spec span + span::before {
+  content: "/";
+  margin-right: 19px;
+  color: #90948e;
+}
+body .workspace-app .mission-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-self: center;
+  min-width: 0;
+  height: 250px;
+  margin: -20px 10px 0 0;
+  pointer-events: none;
+}
+body .workspace-app .mission-art img {
+  position: relative;
+  display: block;
+  width: 208px;
+  height: 208px;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  z-index: 1;
+}
+body .workspace-app .mission-orbit {
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  border: 1px solid #17181b12;
+  border-radius: 50%;
+}
+body .workspace-app .orbit-two {
+  width: 180px;
+  height: 180px;
+  border-style: dashed;
+  transform: rotate(-18deg);
+}
+body .workspace-app .mission-coordinate {
+  position: absolute;
+  color: #676d67;
+  font:
+    8px "Geist Mono",
+    monospace;
+  letter-spacing: 0.1em;
+}
+body .workspace-app .coordinate-one {
+  top: 17px;
+  left: 8px;
+}
+body .workspace-app .coordinate-two {
+  right: 0;
+  bottom: 12px;
+}
+body .workspace-app .mission-trace {
+  display: flex;
+  grid-column: 1/-1;
+  align-items: center;
+  gap: 15px;
+  overflow-x: auto;
+  min-width: 0;
+  margin: 0 -38px;
+  padding: 15px 38px;
+  border-top: 1px solid #dcded8;
+  color: #6b7069;
+  background: #fcfcfc59;
+  white-space: nowrap;
+}
+body .workspace-app .mission-trace code {
+  color: #4b504b;
+  font-size: 11px;
+}
+body .workspace-app .mission-trace > svg {
+  flex-shrink: 0;
+}
+body .workspace-app .metric-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 29px 0 40px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--workspace-rule);
+  background: transparent;
+}
+body .workspace-app .metric {
+  min-width: 0;
+  padding: 5px 24px 24px;
+  border: 0;
+  border-right: 1px solid var(--workspace-rule);
+}
+body .workspace-app .metric:first-child {
+  padding-left: 0;
+}
+body .workspace-app .metric:last-child {
+  border-right: 0;
+}
+body .workspace-app .metric > span {
+  display: block;
+  color: var(--workspace-muted);
+  font:
+    10px "Geist Mono",
+    monospace;
+  letter-spacing: 0.02em;
+}
+body .workspace-app .metric > strong {
+  margin: 12px 0 5px;
+  color: var(--workspace-ink);
+  font-size: 37px;
+  font-weight: 450;
+  letter-spacing: -0.06em;
+}
+body .workspace-app .metric.warning > strong {
+  color: #85612f;
+}
+body .workspace-app .metric > p {
+  color: var(--workspace-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+body .workspace-app .overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
+  gap: 36px;
+  margin: 0;
+}
+body .workspace-app .activity-section,
+body .workspace-app .review-queue {
+  min-width: 0;
+}
+body .workspace-app .section-heading {
+  align-items: center;
+  gap: 15px;
+  padding-bottom: 20px;
+}
+body .workspace-app .section-heading .eyebrow {
+  margin-bottom: 9px;
+  color: #65676b;
+  font:
+    9px "Geist Mono",
+    monospace;
+  letter-spacing: 0.09em;
+}
+body .workspace-app .section-heading h2 {
+  color: var(--workspace-ink);
+  font-size: 21px;
+  font-weight: 470;
+  letter-spacing: -0.035em;
+}
+body .workspace-app .section-heading .text-button {
+  flex-shrink: 0;
+  gap: 5px;
+  color: var(--workspace-muted);
+  font-size: 12px;
+}
+body .workspace-app .campaign-list-header,
+body .workspace-app .campaign-row {
+  grid-template-columns: minmax(0, 1fr) 88px 95px 30px;
+  gap: 12px;
+}
+body .workspace-app .campaign-list-header {
+  padding: 13px 0;
+  color: #65676b;
+  font:
+    9px "Geist Mono",
+    monospace;
+  letter-spacing: 0.04em;
+}
+body .workspace-app .campaign-row {
+  padding: 21px 0;
+}
+body .workspace-app .campaign-row:hover,
+body .workspace-app .finding-row:hover,
+body .workspace-app .target-row:hover {
+  background: #eeeeed65;
+}
+body .workspace-app .campaign-name {
+  gap: 9px;
+}
+body .workspace-app .campaign-symbol {
+  width: 24px;
+  min-width: 24px;
+  color: #707679;
+}
+body .workspace-app .row-title {
+  color: var(--workspace-ink);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+body .workspace-app .row-title:hover {
+  color: #7156b7;
+}
+body .workspace-app .campaign-name p {
+  margin-top: 4px;
+  color: var(--workspace-muted);
+  font-size: 11px;
+}
+body .workspace-app .campaign-name p span {
+  color: var(--workspace-muted);
+}
+body .workspace-app .campaign-findings {
+  margin-top: 5px;
+  color: #85612f;
+  font-size: 11px;
+}
+body .workspace-app .badge {
+  min-height: 23px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 10px;
+  line-height: 1.3;
+}
+body .workspace-app .campaign-count > span {
+  color: #303436;
+  font-size: 12px;
+}
+body .workspace-app .campaign-count small {
+  margin-top: 5px;
+  color: var(--workspace-muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+body .workspace-app .campaign-count .muted {
+  color: var(--workspace-muted);
+}
+body .workspace-app .campaign-actions .icon-button {
+  width: 30px;
+  min-width: 30px;
+  height: 32px;
+  color: #454a4c;
+}
+body .workspace-app .review-queue {
+  padding: 0 0 0 28px;
+  border-top: 0;
+  border-left: 1px solid var(--workspace-rule);
+}
+body .workspace-app .review-queue .section-heading {
+  align-items: flex-start;
+  padding-bottom: 18px;
+}
+body .workspace-app .review-queue .section-heading h2 {
+  font-size: 20px;
+}
+body .workspace-app .count {
+  color: #595c60;
+  font-size: 11px;
+}
+body .workspace-app .activity-section .section-heading .eyebrow,
+body .workspace-app .review-queue .section-heading .eyebrow,
+body .workspace-app .campaign-list-header > span {
+  color: #595c60;
+}
+body .workspace-app .finding-row {
+  padding: 21px 0;
+  gap: 14px;
+  transform: none;
+}
+body .workspace-app .finding-symbol {
+  min-width: 29px;
+  color: #707679;
+}
+body .workspace-app .finding-symbol.warning {
+  color: #8a6738;
+}
+body .workspace-app .finding-description > strong {
+  color: var(--workspace-ink);
+  font-size: 14px;
+  font-weight: 450;
+  line-height: 1.5;
+}
+body .workspace-app .finding-description > span {
+  margin-top: 5px;
+  color: var(--workspace-muted);
+  font-size: 12px;
+}
+body .workspace-app .finding-review {
+  color: var(--workspace-muted);
+  font-size: 11px;
+}
+body .workspace-app .finding-row > svg:last-child {
+  color: #74797c;
+}
+body .workspace-app .review-queue .finding-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 16px;
+  align-items: start;
+  gap: 9px 10px;
+}
+body .workspace-app .review-queue .finding-symbol {
+  grid-column: 1;
+  grid-row: 1/3;
+  min-width: 24px;
+  margin-top: 1px;
+}
+body .workspace-app .review-queue .finding-symbol > svg {
+  width: 22px;
+}
+body .workspace-app .review-queue .finding-description {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  padding: 0;
+}
+body .workspace-app .review-queue .finding-description > span {
+  font-size: 11px;
+}
+body .workspace-app .review-queue .finding-row > .badge {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
+  margin: 0;
+}
+body .workspace-app .review-queue .finding-review {
+  display: none;
+}
+body .workspace-app .review-queue .finding-row > svg:last-child {
+  position: static;
+  grid-column: 3;
+  grid-row: 1;
+  width: 15px;
+}
+body .workspace-app .review-doc-link {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-top: 20px;
+  color: var(--workspace-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+body .workspace-app .review-doc-link > svg:last-child {
+  margin-left: auto;
+}
+body .workspace-app .quiet-empty {
+  align-items: flex-start;
+  padding: 22px 0 33px;
+  border-top: 1px solid var(--workspace-rule);
+  color: #6b726e;
+}
+body .workspace-app .quiet-empty strong {
+  color: var(--workspace-ink);
+  font-size: 14px;
+}
+body .workspace-app .quiet-empty p {
+  color: var(--workspace-muted);
+  font-size: 13px;
+}
+body .workspace-app .fixture-footnote {
+  margin-top: 28px;
+  gap: 8px;
+  color: var(--workspace-muted);
+}
+body .workspace-app .fixture-footnote p {
+  color: var(--workspace-muted);
+  font-size: 12px;
+}
+body .workspace-app .workspace-footer {
+  margin-top: 30px;
+  padding: 24px 0 28px;
+  gap: 24px;
+  color: var(--workspace-muted);
+  font-size: 11px;
+}
+body .workspace-app .workspace-footer > span:last-child {
+  color: var(--workspace-muted);
+}
+body .workspace-app .campaign-list.expanded .campaign-list-header,
+body .workspace-app .campaign-list.expanded .campaign-row {
+  grid-template-columns: minmax(220px, 1.5fr) 120px 140px 170px 32px;
+  gap: 22px;
+}
+body .workspace-app .campaign-time {
+  color: var(--workspace-muted);
+  font-size: 12px;
+}
+body .workspace-app .list-toolbar {
+  gap: 18px;
+  padding-top: 0;
+}
+body .workspace-app .search-field {
+  min-width: 200px;
+  color: #73777b;
+}
+body .workspace-app .search-field input {
+  color: var(--workspace-ink);
+  font-size: 14px;
+}
+body .workspace-app .search-field input::placeholder {
+  color: #65676b;
+}
+body .workspace-app .filter-field {
+  color: var(--workspace-muted);
+}
+body .workspace-app .filter-field select {
+  min-height: 40px;
+  padding: 9px 31px 9px 12px;
+  border: 1px solid var(--workspace-rule);
+  border-radius: 8px;
+  background: var(--workspace-paper);
+  color: var(--workspace-ink);
+  font-size: 12px;
+}
+body .workspace-app .result-count {
+  color: var(--workspace-muted);
+  font-size: 12px;
+}
+body .workspace-app .empty-state {
+  padding: 40px 16px;
+}
+body .workspace-app .empty-state h3 {
+  color: var(--workspace-ink);
+  font-size: 22px;
+}
+body .workspace-app .empty-state p {
+  color: var(--workspace-muted);
+  font-size: 14px;
+}
+body .workspace-app .empty-mark {
+  color: #727977;
+}
+body .workspace-app .target-row {
+  align-items: start;
+  gap: 20px;
+  padding: 28px 0;
+}
+body .workspace-app .target-symbol {
+  color: #6d7475;
+}
+body .workspace-app .target-description h2 {
+  color: var(--workspace-ink);
+  font-size: 17px;
+}
+body .workspace-app .target-description p,
+body .workspace-app .target-description details p {
+  color: var(--workspace-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+body .workspace-app .target-description summary {
+  color: #4d5254;
+  font-size: 12px;
+}
+body .workspace-app .target-description details > span {
+  color: var(--workspace-muted);
+  font-size: 12px;
+}
+body .workspace-app .add-target-line {
+  color: var(--workspace-ink);
+  font-size: 14px;
+}
+body .workspace-app .integration-row {
+  gap: 28px;
+  padding: 30px 0;
+}
+body .workspace-app .integration-monogram {
+  display: grid;
+  place-items: center;
+  border: 1px solid #d8d9d6;
+  border-radius: 14px;
+  background: #eeefed;
+  color: var(--workspace-ink);
+  box-shadow: none;
+}
+body .workspace-app .fixture-monogram {
+  background: #edeaf6;
+  color: #6c57a4;
+}
+body .workspace-app .integration-title h2 {
+  color: var(--workspace-ink);
+  font-size: 24px;
+}
+body .workspace-app .integration-content > p {
+  max-width: 64ch;
+  color: var(--workspace-muted);
+  font-size: 14px;
+}
+body .workspace-app .integration-content dl {
+  margin-block: 22px;
+}
+body .workspace-app .integration-content dt {
+  color: var(--workspace-muted);
+  font-size: 11px;
+}
+body .workspace-app .integration-content dd {
+  color: var(--workspace-ink);
+  font-size: 14px;
+}
+body .workspace-app .connection-boundary {
+  color: #785f40;
+}
+body .workspace-app .connection-boundary p {
+  font-size: 13px;
+  color: #785f40;
+}
+body .workspace-app .integration-note {
+  padding-top: 26px;
+  color: #666d70;
+}
+body .workspace-app .integration-note h3 {
+  color: var(--workspace-ink);
+  font-size: 15px;
+}
+body .workspace-app .integration-note p {
+  max-width: 76ch;
+  color: var(--workspace-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+body .workspace-app .loading-state {
+  color: var(--workspace-muted);
+}
+body .workspace-app .loading-state h1 {
+  color: var(--workspace-ink);
+}
+@media (max-width: 1180px) {
+  body .workspace-app .workspace-header {
+    grid-template-columns: 1fr auto;
+    gap: 15px;
+    padding: 15px 28px;
+  }
+  body .workspace-app .workspace-nav {
+    grid-column: 1/-1;
+    grid-row: 2;
+    justify-self: start;
+    width: 100%;
+    max-width: 100%;
+  }
+  body .workspace-app .workspace-nav > a {
+    flex: 1;
+  }
+  body .workspace-app .workspace-identity {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  body .workspace-app .workspace-main {
+    width: calc(100% - 64px);
+  }
+  body .workspace-app .overview-grid {
+    grid-template-columns: minmax(0, 1.6fr) minmax(265px, 1fr);
+    gap: 26px;
+  }
+  body .workspace-app .review-queue {
+    padding-left: 22px;
+  }
+  body .workspace-app .review-queue .section-heading {
+    flex-direction: column;
+    gap: 10px;
+  }
+  body .workspace-app .campaign-list-header,
+  body .workspace-app .campaign-row {
+    grid-template-columns: minmax(0, 1fr) 80px 80px 26px;
+    gap: 8px;
+  }
+  body .workspace-app .campaign-list.expanded .campaign-list-header,
+  body .workspace-app .campaign-list.expanded .campaign-row {
+    grid-template-columns: minmax(180px, 1fr) 100px 110px 140px 28px;
+    gap: 16px;
+  }
+  body .workspace-app .mission-intro {
+    grid-template-columns: minmax(0, 1fr) 240px;
+  }
+  body .workspace-app .mission-art {
+    margin-right: -10px;
+  }
+}
+@media (max-width: 900px) {
+  body .workspace-app .overview-grid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  body .workspace-app .review-queue {
+    padding: 28px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--workspace-rule);
+  }
+  body .workspace-app .review-queue .section-heading {
+    flex-direction: row;
+    align-items: center;
+  }
+  body .workspace-app .review-queue .finding-row {
+    grid-template-columns: 24px minmax(0, 1fr) 100px 16px;
+    align-items: center;
+  }
+  body .workspace-app .review-queue .finding-row > .badge {
+    grid-column: 3;
+    grid-row: 1;
+    margin: 0;
+  }
+  body .workspace-app .review-queue .finding-row > svg:last-child {
+    grid-column: 4;
+  }
+  body .workspace-app .campaign-time {
+    display: none;
+  }
+  body .workspace-app .campaign-list.expanded .campaign-list-header,
+  body .workspace-app .campaign-list.expanded .campaign-row {
+    grid-template-columns: minmax(0, 1fr) 100px 110px 30px;
+  }
+}
+@media (max-width: 640px) {
+  body .workspace-app .workspace-header {
+    padding: 13px 17px 0;
+    gap: 11px;
+    min-height: 105px;
+  }
+  body .workspace-app .workspace-header .brand {
+    font-size: 25px;
+  }
+  body .workspace-app .workspace-header .brand img {
+    width: 38px;
+    height: 38px;
+  }
+  body .workspace-app .workspace-mode {
+    font-size: 10px;
+  }
+  body .workspace-app .workspace-identity {
+    gap: 9px;
+  }
+  body .workspace-app .avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+  }
+  body .workspace-app .workspace-nav {
+    gap: 2px;
+    overflow-x: auto;
+    padding: 4px 2px;
+    margin-inline: -2px;
+    width: calc(100% + 4px);
+    border-radius: 0;
+    background: transparent;
+    scrollbar-width: none;
+  }
+  body .workspace-app .workspace-nav::-webkit-scrollbar {
+    display: none;
+  }
+  body .workspace-app .workspace-nav > a {
+    flex: 0 0 auto;
+    padding: 10px 11px;
+    min-height: 40px;
+    gap: 6px;
+    font-size: 12px;
+  }
+  body .workspace-app .workspace-nav > a > svg:first-child {
+    width: 15px;
+    height: 15px;
+  }
+  body .workspace-app .workspace-nav > a > .nav-count {
+    font-size: 9px;
+    min-width: 16px;
+    height: 16px;
+  }
+  body .workspace-app .nav-glider {
+    top: 4px;
+    bottom: 4px;
+  }
+  body .workspace-app .workspace-main {
+    width: calc(100% - 36px);
+    padding-top: 21px;
+  }
+  body .workspace-app .workspace-date {
+    margin-bottom: 22px;
+    gap: 8px;
+    font-size: 8px;
+  }
+  body .workspace-app .workspace-date > span:last-child {
+    font-size: 8px;
+  }
+  body .workspace-app .page-heading {
+    align-items: flex-start;
+    gap: 17px;
+    margin-bottom: 25px;
+  }
+  body .workspace-app .page-heading h1 {
+    font-size: 33px;
+    line-height: 1.12;
+  }
+  body .workspace-app .page-heading p {
+    margin-top: 10px;
+    font-size: 13px;
+  }
+  body .workspace-app .page-heading .eyebrow {
+    font-size: 9px;
+  }
+  body .workspace-app .page-heading > .button {
+    margin-top: 0;
+    align-self: flex-start;
+  }
+  body .workspace-app .button {
+    font-size: 12px;
+    min-height: 42px;
+    padding: 11px 14px;
+  }
+  body .workspace-app .mission-intro {
+    display: block;
+    min-height: 0;
+    padding: 20px 21px 0;
+    border-radius: 14px;
+  }
+  body .workspace-app .mission-eyebrow {
+    max-width: calc(100% - 72px);
+    min-height: 60px;
+    align-items: flex-start;
+    font-size: 9px;
+    line-height: 1.7;
+    gap: 7px;
+  }
+  body .workspace-app .mission-eyebrow > svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  body .workspace-app .mission-intro h2 {
+    margin: 10px 0 19px;
+    font-size: clamp(30px, 8vw, 35px);
+    line-height: 1.08;
+  }
+  body .workspace-app .mission-actions {
+    gap: 5px 17px;
+  }
+  body .workspace-app .mission-guide {
+    font-size: 12px;
+  }
+  body .workspace-app .mission-spec {
+    gap: 8px 13px;
+    margin-top: 19px;
+    padding-bottom: 18px;
+    font-size: 9px;
+  }
+  body .workspace-app .mission-spec span + span::before {
+    margin-right: 13px;
+  }
+  body .workspace-app .mission-art {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 79px;
+    height: 79px;
+    margin: 0;
+  }
+  body .workspace-app .mission-art img {
+    width: 78px;
+    height: 78px;
+  }
+  body .workspace-app .mission-orbit {
+    width: 76px;
+    height: 76px;
+  }
+  body .workspace-app .orbit-two {
+    width: 56px;
+    height: 56px;
+  }
+  body .workspace-app .mission-coordinate {
+    display: none;
+  }
+  body .workspace-app .mission-trace {
+    margin-inline: -21px;
+    padding: 13px 21px;
+    gap: 10px;
+  }
+  body .workspace-app .mission-trace code {
+    font-size: 9px;
+  }
+  body .workspace-app .metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-block: 25px 29px;
+  }
+  body .workspace-app .metric {
+    padding: 7px 15px 18px;
+    border-right: 1px solid var(--workspace-rule);
+  }
+  body .workspace-app .metric:nth-child(2) {
+    border-right: 0;
+  }
+  body .workspace-app .metric:nth-child(n + 3) {
+    border-top: 1px solid var(--workspace-rule);
+    padding-top: 18px;
+  }
+  body .workspace-app .metric:nth-child(3) {
+    padding-left: 0;
+  }
+  body .workspace-app .metric:nth-child(4) {
+    border-right: 0;
+  }
+  body .workspace-app .metric > span {
+    font-size: 9px;
+  }
+  body .workspace-app .metric > strong {
+    font-size: 34px;
+    margin-block: 9px 5px;
+  }
+  body .workspace-app .metric > p {
+    font-size: 11px;
+  }
+  body .workspace-app .section-heading h2 {
+    font-size: 21px;
+  }
+  body .workspace-app .section-heading .eyebrow {
+    font-size: 8px;
+  }
+  body .workspace-app .section-heading .text-button {
+    font-size: 11px;
+  }
+  body .workspace-app .campaign-list-header {
+    display: none;
+  }
+  body .workspace-app .campaign-row,
+  body .workspace-app .campaign-list.expanded .campaign-row {
+    grid-template-columns: minmax(0, 1fr) 34px;
+    gap: 12px 8px;
+    padding: 20px 0;
+  }
+  body .workspace-app .campaign-name {
+    grid-column: 1;
+    grid-row: 1;
+    gap: 10px;
+  }
+  body .workspace-app .campaign-symbol {
+    min-width: 23px;
+    width: 23px;
+  }
+  body .workspace-app .row-title {
+    font-size: 14px;
+  }
+  body .workspace-app .campaign-name p {
+    font-size: 11px;
+  }
+  body .workspace-app .campaign-findings {
+    font-size: 10px;
+  }
+  body .workspace-app .campaign-actions {
+    grid-column: 2;
+    grid-row: 1/3;
+  }
+  body .workspace-app .campaign-actions .icon-button {
+    width: 34px;
+    height: 38px;
+  }
+  body .workspace-app .campaign-status {
+    grid-column: 1;
+    grid-row: 2;
+    margin-left: 33px;
+  }
+  body .workspace-app .campaign-count {
+    display: flex;
+    grid-column: 1;
+    grid-row: 3;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    margin: -3px 0 0 33px;
+  }
+  body .workspace-app .campaign-count > span {
+    white-space: nowrap;
+    font-size: 11px;
+  }
+  body .workspace-app .campaign-count small {
+    margin: 0;
+    font-size: 9px;
+  }
+  body .workspace-app .review-queue {
+    padding-top: 26px;
+  }
+  body .workspace-app .review-queue .section-heading h2 {
+    font-size: 20px;
+  }
+  body .workspace-app .review-queue .finding-row {
+    grid-template-columns: 24px minmax(0, 1fr) 16px;
+  }
+  body .workspace-app .review-queue .finding-row > .badge {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  body .workspace-app .review-queue .finding-row > svg:last-child {
+    grid-column: 3;
+  }
+  body .workspace-app .finding-row {
+    gap: 10px;
+    padding-block: 20px;
+  }
+  body .workspace-app .finding-description {
+    min-width: 170px;
+    padding-right: 20px;
+  }
+  body .workspace-app .finding-description > strong {
+    font-size: 14px;
+  }
+  body .workspace-app .finding-description > span {
+    font-size: 11px;
+  }
+  body .workspace-app .finding-row > .badge {
+    margin-left: 39px;
+  }
+  body .workspace-app .finding-review {
+    font-size: 10px;
+  }
+  body .workspace-app .finding-row > svg:last-child {
+    position: absolute;
+    top: 22px;
+    right: 0;
+  }
+  body .workspace-app .review-doc-link {
+    font-size: 12px;
+  }
+  body .workspace-app .fixture-footnote {
+    margin-top: 23px;
+  }
+  body .workspace-app .fixture-footnote p {
+    font-size: 11px;
+  }
+  body .workspace-app .workspace-footer {
+    gap: 13px 18px;
+    margin-top: 26px;
+    padding-block: 22px 25px;
+    font-size: 10px;
+  }
+  body .workspace-app .workspace-footer > span:last-child {
+    margin: 0;
+    font-size: 9px;
+  }
+  body .workspace-app .workspace-footer > a {
+    font-size: 10px;
+  }
+  body .workspace-app .list-toolbar {
+    gap: 12px;
+  }
+  body .workspace-app .search-field {
+    min-width: 100%;
+  }
+  body .workspace-app .search-field input {
+    font-size: 14px;
+  }
+  body .workspace-app .result-count {
+    font-size: 11px;
+  }
+  body .workspace-app .filter-field select {
+    font-size: 12px;
+  }
+  body .workspace-app .target-row {
+    gap: 13px;
+    padding-block: 24px;
+  }
+  body .workspace-app .target-description h2 {
+    font-size: 16px;
+  }
+  body .workspace-app .target-description p {
+    font-size: 13px;
+  }
+  body .workspace-app .target-description details p {
+    font-size: 13px;
+  }
+  body .workspace-app .target-row > .button {
+    margin-left: 40px;
+    font-size: 12px;
+  }
+  body .workspace-app .integration-row {
+    gap: 16px;
+    padding-block: 25px;
+  }
+  body .workspace-app .integration-title h2 {
+    font-size: 23px;
+  }
+  body .workspace-app .integration-content > p,
+  body .workspace-app .integration-content dd {
+    font-size: 13px;
+  }
+  body .workspace-app .integration-content dt {
+    font-size: 10px;
+  }
+  body .workspace-app .connection-boundary p {
+    font-size: 12px;
+  }
+  body .workspace-app .integration-note p {
+    font-size: 13px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body .workspace-app .nav-glider,
+  body .workspace-app .workspace-nav > a,
+  body .workspace-app .button,
+  body .workspace-app .finding-row {
+    transition: none;
+  }
+}
+body .workspace-app .workspace-docs-shortcut:hover {
+  background: #eeeaf8;
+  border-color: #cfc5eb;
+}
+body .workspace-app .mission-intro.is-compact {
+  grid-template-columns: minmax(0, 1fr) 156px;
+  min-height: 0;
+  padding: 20px 24px 0;
+}
+body .workspace-app .mission-intro.is-compact h2 {
+  margin: 10px 0 15px;
+  font-size: 28px;
+  line-height: 1.2;
+}
+body .workspace-app .mission-intro.is-compact h2 br {
+  display: none;
+}
+body .workspace-app .mission-intro.is-compact h2 span {
+  margin-left: 7px;
+  color: #656a64;
+}
+body .workspace-app .mission-intro.is-compact .mission-spec {
+  display: none;
+}
+body .workspace-app .mission-intro.is-compact .mission-art {
+  height: 130px;
+  margin: 0;
+}
+body .workspace-app .mission-intro.is-compact .mission-art img {
+  width: 112px;
+  height: 112px;
+}
+body .workspace-app .mission-intro.is-compact .orbit-one {
+  width: 136px;
+  height: 136px;
+}
+body .workspace-app .mission-intro.is-compact .orbit-two {
+  width: 100px;
+  height: 100px;
+}
+body .workspace-app .mission-intro.is-compact .mission-coordinate {
+  display: none;
+}
+body .workspace-app .mission-intro.is-compact .mission-trace {
+  margin: 16px -24px 0;
+  padding: 12px 24px;
+}
+@media (max-width: 640px) {
+  body .workspace-app .workspace-nav {
+    scrollbar-width: thin;
+    scrollbar-color: #787c83 #efefef;
+  }
+  body .workspace-app .workspace-nav::-webkit-scrollbar {
+    display: block;
+    height: 3px;
+  }
+  body .workspace-app .workspace-nav::-webkit-scrollbar-thumb {
+    background: #787c83;
+    border-radius: 3px;
+  }
+  body .workspace-app .workspace-nav::-webkit-scrollbar-track {
+    background: #efefef;
+  }
+  body .workspace-app .mission-intro.is-compact {
+    display: block;
+    padding: 15px 18px 0;
+  }
+  body .workspace-app .mission-intro.is-compact .mission-eyebrow {
+    display: none;
+  }
+  body .workspace-app .mission-intro.is-compact h2 {
+    max-width: calc(100% - 66px);
+    font-size: 23px;
+    margin: 4px 0 15px;
+  }
+  body .workspace-app .mission-intro.is-compact h2 span {
+    margin-left: 0;
+  }
+  body .workspace-app .mission-intro.is-compact .mission-art {
+    top: 13px;
+    right: 12px;
+    width: 64px;
+    height: 64px;
+  }
+  body .workspace-app .mission-intro.is-compact .mission-art img {
+    width: 62px;
+    height: 62px;
+  }
+  body .workspace-app .mission-intro.is-compact .orbit-one {
+    width: 64px;
+    height: 64px;
+  }
+  body .workspace-app .mission-intro.is-compact .orbit-two {
+    width: 48px;
+    height: 48px;
+  }
+  body .workspace-app .mission-intro.is-compact .mission-trace {
+    margin: 15px -18px 0;
+    padding: 11px 18px;
+  }
+}

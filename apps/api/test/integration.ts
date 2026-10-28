@@ -130,8 +130,18 @@ async function checkPublicBoundary() {
     "/credits",
     "/app",
     "/app/findings",
+    "/docs",
+    "/docs/quickstart",
+    "/docs/first-campaign",
+    "/docs/evidence",
+    "/docs/integrations",
+    "/docs/api",
+    "/docs/troubleshooting",
     "/licenses/phosphor-MIT.txt",
     "/brand/vouch-mark.webp",
+    "/brand/vouch-scout.webp",
+    "/brand/vouch-builder.webp",
+    "/licenses/opencode-MIT.txt",
     "/favicon.ico",
   ]) {
     const response = await fetch(`http://127.0.0.1:${port}${path}`);

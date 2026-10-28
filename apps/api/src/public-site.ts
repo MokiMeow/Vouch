@@ -3,10 +3,12 @@ import express from "express";
 // Only browser routes and deliberately published assets belong on this surface.
 // Documentation, credentials, audit output and source maps are never web assets.
 const page =
-  /^(?:\/|\/credits|\/app(?:\/(?:campaigns|findings|targets|integrations|runs\/[a-f0-9-]+))?)\/?$/;
+  /^(?:\/|\/credits|\/docs(?:\/(?:quickstart|first-campaign|evidence|integrations|api|troubleshooting))?|\/app(?:\/(?:campaigns|findings|targets|integrations|runs\/[a-f0-9-]+))?)\/?$/;
 const asset = /^\/assets\/[\w.-]+\.(?:js|css|woff2?)$/;
-const brand = /^\/brand\/(?:vouch-mark\.webp|pearl-wave\.webp|icon-192\.png)$/;
-const license = /^\/licenses\/(?:phosphor-MIT|geist-OFL|geist-mono-OFL)\.txt$/;
+const brand =
+  /^\/brand\/(?:vouch-mark\.webp|vouch-scout\.webp|vouch-builder\.webp|pearl-wave\.webp|icon-192\.png)$/;
+const license =
+  /^\/licenses\/(?:phosphor-MIT|geist-OFL|geist-mono-OFL|opencode-MIT)\.txt$/;
 
 export const publicSite = express.Router();
 publicSite.use((req, res, next) => {

@@ -136,12 +136,14 @@ function ConfigurationDigest({ run }: { run: Run }) {
       <code className="config-hash" title={run.config_hash}>
         {run.config_hash ?? "Hash unavailable"}
       </code>
-      <span>Digest: {run.config_hash_algorithm ?? "Not recorded"}</span>
+      <span>
+        <b>Digest</b> {run.config_hash_algorithm ?? "Not recorded"}
+      </span>
       <span role={run.config_integrity === "mismatch" ? "alert" : undefined}>
         {run.config_integrity === "verified"
           ? "Captured configuration verified"
           : run.config_integrity === "mismatch"
-            ? "Configuration mismatch: this record differs from its captured digest"
+            ? "Configuration mismatch. This record differs from its captured digest"
             : "Configuration digest has not been verified"}
       </span>
     </>
@@ -156,8 +158,12 @@ export function Provenance({ run }: { run: Run }) {
       </div>
       <p>Policy, scope, persona and runtime were captured for this run.</p>
       <ConfigurationDigest run={run} />
-      <span>Model: {run.config.runtime?.model ?? "Unknown"}</span>
-      <span>API: {run.config.runtime?.apiFlavor ?? "Unknown"}</span>
+      <span>
+        <b>Model</b> {run.config.runtime?.model ?? "Unknown"}
+      </span>
+      <span>
+        <b>API</b> {run.config.runtime?.apiFlavor ?? "Unknown"}
+      </span>
       <ScopeDetails scope={run.config.scope} />
     </section>
   );

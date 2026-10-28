@@ -7,47 +7,78 @@ import {
   WarningCircleIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  type ComponentPropsWithoutRef,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import type { Navigate } from "../types";
+function plainLeftClick(event: MouseEvent<HTMLAnchorElement>) {
+  return (
+    event.button === 0 &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey
+  );
+}
 export function Link({
   to,
   navigate,
   children,
   className = "",
   ...props
-}: {
+}: Omit<ComponentPropsWithoutRef<"a">, "href"> & {
   to: string;
   navigate: Navigate;
-  children: ReactNode;
-  className?: string;
-  "aria-label"?: string;
-  "aria-current"?: "page";
-  onMouseEnter?: () => void;
-  onFocus?: () => void;
 }) {
   function click(e: MouseEvent<HTMLAnchorElement>) {
-    if (
-      !e.metaKey &&
-      !e.ctrlKey &&
-      !e.altKey &&
-      !e.shiftKey &&
-      e.button === 0
-    ) {
-      e.preventDefault();
-      navigate(to);
-    }
+    props.onClick?.(e);
+    if (e.defaultPrevented || !plainLeftClick(e)) return;
+    if (!["", "_self"].includes(e.currentTarget.target)) return;
+    if (e.currentTarget.hasAttribute("download")) return;
+    e.preventDefault();
+    navigate(to);
   }
   return (
-    <a href={to} onClick={click} className={className} {...props}>
+    <a {...props} href={to} onClick={click} className={className}>
       {children}
     </a>
   );
 }
 export function Brand({ navigate }: { navigate: Navigate }) {
   return (
-    <Link to="/" navigate={navigate} className="brand" aria-label="Vouch home">
-      <img src="/brand/vouch-mark.webp" width="48" height="48" alt="" />
+    <Link
+      to="/"
+      navigate={navigate}
+      className="brand"
+      aria-label="Vouch home"
+      draggable={false}
+    >
+      <img
+        src="/brand/vouch-mark.webp"
+        width="48"
+        height="48"
+        alt=""
+        draggable={false}
+        onDragStart={(event) => event.preventDefault()}
+      />
       <span>vouch</span>
+    </Link>
+  );
+}
+export function CreditsLink({
+  navigate,
+  size = 14,
+}: {
+  navigate: Navigate;
+  size?: number;
+}) {
+  return (
+    <Link to="/credits" navigate={navigate}>
+      Credits & assets <ArrowUpRightIcon size={size} />
     </Link>
   );
 }
