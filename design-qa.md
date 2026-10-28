@@ -1,3 +1,5 @@
+> Historical fixture baseline. This design verification predates the live/authentication expansion. The expanded code received compilation and static review only because acceptance testing was left to the user. See [current handoff](docs/project-status.md).
+
 # Vouch design verification
 
 final result: passed

@@ -1,3 +1,5 @@
+> Historical fixture baseline. This repository audit predates the live/authentication expansion. The expanded code received compilation and static review only because acceptance testing was left to the user. See [current handoff](project-status.md).
+
 # Vouch repository audit — 28 October 2026
 
 Applied [ub-mode](https://github.com/unclebob/ub-mode) from the exact revision recorded in [the action log](action-log.md). The audit covered the application source, policy engine, database/worker behavior, provider boundary, UI flows, configuration, dependencies, credits, and setup instructions. This is a development audit, not a production security certification.

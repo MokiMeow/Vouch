@@ -14,11 +14,15 @@ flowchart LR
     J --> K{Window and call slots available?}
     K -->|Yes| D
     K -->|No| L[Request rejected]
-    C -. Live path .-> M[Bolna]
-    M -.-> N[Blocked: network, caller/target setup, verified resource controls]
+    D --> M[Isolated Bolna caller and Twilio controls]
+    M --> N[Approved PSTN target]
+    N --> O[Signed customer backend connector]
+    O --> F
+    M --> P[Encrypted real recordings]
+    P --> H
 ```
 
-The current end-to-end workflow is explicitly synthetic. Its account writes and readbacks are real PostgreSQL operations, but its conversation is a fixture, not a live phone recording. Browser speech replay is labelled separately.
+The fixture path uses explicitly synthetic conversation and real fictional-account PostgreSQL writes/readbacks. The implemented live path uses a configured Twilio-backed Bolna caller, actual provider artifacts and signed customer backend events. Live activation and acceptance remain operator responsibilities; no successful live call is claimed. Browser speech replay is labelled separately from real recordings.
 
 ## Component responsibilities
 
@@ -31,6 +35,10 @@ The current end-to-end workflow is explicitly synthetic. Its account writes and 
 | Worker              | Claim queued cases, enforce scope and global concurrency, isolate case failures                                 | `apps/api/src/worker.ts`      |
 | Fixture             | Produce synthetic conversations and execute the same instrumented support tool for both scenarios               | `apps/api/src/fixture.ts`     |
 | Evaluator           | Check trusted verification order, account correlation, forbidden execution and observed state                   | `packages/core/src/`          |
+| Authentication      | Session resolution, owner/member access and workspace-bound database context                                    | `apps/api/src/auth.ts`        |
+| Live state machine  | Persist reservations, submission uncertainty, deadlines, cancellation and finalization                          | `apps/api/src/live.ts`        |
+| Evidence connector  | Verify per-run signatures, order and completeness without trusting speech                                       | `apps/api/src/evidence.ts`    |
+| Artifact archive    | Encrypt actual recordings and serve authenticated playback with retention/redaction                             | `apps/api/src/artifacts.ts`   |
 | Provider adapter    | Keep Bolna capabilities and read-only retrieval separate from domain rules                                      | `apps/api/src/bolna.ts`       |
 | HTTP asset boundary | Publish approved pages/assets while blocking repository notes, secrets and source maps                          | `apps/api/src/public-site.ts` |
 
@@ -45,4 +53,4 @@ The current end-to-end workflow is explicitly synthetic. Its account writes and 
 7. The API returns persisted evidence to the workspace. Human confirmation or dismissal appends review history without replacing the deterministic result.
 8. Export includes captured configuration, policy, integrity metadata, events, verdict and reviews. Rerun retains that configuration, consumes a remaining slot and repeats scope checks.
 
-The future live flow replaces the fixture with a verified caller runtime, authorized transport and customer evidence connector. It must preserve these boundaries and add actual audio plus provider-enforced resource controls. See [project status](project-status.md) for the remaining delivery sequence.
+The live flow uses the provider runtime, authorized PSTN transport and customer evidence connector while preserving these boundaries. Actual account resource controls and artifact semantics require acceptance verification. See [project status](project-status.md) for the remaining delivery sequence.

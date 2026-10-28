@@ -1,28 +1,32 @@
-# Vertical-slice acceptance
+# Acceptance and implementation checklist
 
-Implemented and exercised in this cloud instance:
+The [original brief](product-brief.md) defines release acceptance. The [current handoff](project-status.md) distinguishes implemented code from unperformed tests.
 
-- React/TypeScript UI, Node API, PostgreSQL, separate worker.
-- Explicit synthetic target authorization and operator phone allowlisting for registration.
-- Strict immutable scope: target, window, concurrency 1, max calls/duration, budget, fictional identity, scenario categories, prohibited actions, and stop condition.
-- False-authority fixture and legitimate verified control using identical mock backend behavior.
-- Realized synthetic conversation, normalized events, actual mock tool request/execution, and durable PostgreSQL account changes.
-- Deterministic policy assertions with account/order checks and explicit unknown evidence.
-- Reviewer confirmation/dismissal with audit history, same-config bounded rerun, versioned regression JSON export.
-- Responsive findings/report interface; synthetic speech replay is optional and depends on installed browser voices.
-- Unit tests, isolated PostgreSQL integration tests, browser interaction tests, production build and dependency audit.
-- Reproducible configuration digests across JSONB storage, explicit legacy/unverified integrity states, and refusal to run changed captured configurations.
-- Request-race, timeout, retry and cached-evidence recovery checks; bounded background polling and lighter overview responses.
+## Earlier fixture baseline
 
-Not completed or claimed:
+The previous release exercised campaign creation, real fictional-account PostgreSQL writes/readbacks, deterministic grading, human reviews, immutable configuration digests, bounded reruns and regression exports. It passed 60 unit tests, 168 PostgreSQL/HTTP assertions and three browser suites.
 
-- Live Bolna outbound dispatch, verified provider cancellation/duration/cost controls, autonomous adaptive spoken campaigns, live recordings and provider callbacks.
-- Customer transport bridges, SIP/WebSocket/WebRTC, real target-side backend evidence connectors.
-- Credentialed connection test or successful live account call.
-- Production multi-user authentication, tenant isolation, deployment, publication, or fresh-task restoration.
+Those results predate the live/authentication expansion. They do not validate this new release.
 
-The local fixture is useful and reproducible; the complete live-product definition in the brief is not yet satisfied. See `bolna.md` for the exact implementation and validation work remaining.
+## New implementation delivered
 
-The visual revamp and repository audit are documented in [design notes](design-redesign.md), [repository audit](repository-audit.md), [action log](action-log.md), and [application flow](application-flow.md). Live limitations above remain unchanged.
+- Isolated Bolna scenario callers with captured configuration, model and actual dispatch code
+- Twilio account/recipient-verified cancellation and carrier duration controls
+- Durable reservations, deadlines, submission markers, restart recovery and unknown-outcome reconciliation
+- Signed per-run customer backend evidence with replay/sequence/completeness checks
+- Actual provider transcripts and encrypted recording archive/playback, owner redaction/deletion and artifact retry
+- Workspace authentication, owner/member access, CSRF and forced PostgreSQL tenant policies
+- Native Node production builds, nonroot containers, health/heartbeat checks, retention and guarded backup/restore
+- Updated UI and seven public guides exposing the supported workflow and its configuration gates
 
-See the [project status report](project-status.md) for the approximate full-brief completion estimate and remaining delivery sequence.
+## Acceptance left to the user
+
+1. Review/update isolated test harness setup for the new authentication, tenant context and signed evidence contract.
+2. Verify unit, database, HTTP, browser, accessibility, security and operational behavior for the expanded implementation.
+3. Configure the supported real caller/carrier and explicitly authorized target.
+4. Validate both bounded spoken scenarios with actual audio, transcript, backend proofs and final all-component costs.
+5. Exercise hard duration, cancellation, stop, submission uncertainty, restart and concurrent-worker behavior.
+6. Review a real finding, rerun within scope and inspect its regression export.
+7. Build/deploy the containers behind HTTPS and exercise backup, restore, retention and workspace isolation.
+
+No unit, integration, browser or real-call tests were run for this expansion, as requested. No public deployment, provider authentication, completed live call or recovery success is claimed. Additional transports and runtime providers remain optional future extensions.

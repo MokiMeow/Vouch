@@ -1,42 +1,54 @@
-# Vouch project status
+# Vouch implementation and acceptance handoff
 
-Assessed on October 28, 2026 against the [original project brief](product-brief.md).
+Updated on October 28, 2026 against the [original brief](product-brief.md).
 
-## Completion estimate
+## Implementation status
 
-**Approximately 65% complete for the full product described in the brief.** This is an engineering estimate of delivered capability, not a measured test-coverage percentage or a claim that 65% of development time has elapsed. The uncertainty is roughly five percentage points because provider integration effort is not yet established.
+The core coding areas for the first PSTN release are implemented, including the previously missing live runtime, resource-control state machine, customer evidence connector, authenticated workspace access and deployment operations. The previous approximate 65 percent assessment described the earlier fixture-only implementation and is superseded by this checklist.
 
-The local synthetic workflow is implemented and tested from campaign creation to regression export. Complete acceptance requires a real autonomous Bolna call with enforced resource limits, actual recordings and trusted customer evidence. That path remains incomplete. Additional UI polish does not close it.
+**Acceptance testing is pending by explicit user request.** Code implementation is not proof of a working provider account or a production-ready deployment. No new successful provider authentication, live call, container deployment, backup restoration or fresh-task recovery is claimed.
 
-| Area                   | Current capability                                                                                                   | Remaining work                                                                                         |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Setup and persistence  | Node/pnpm setup, SQL migrations, retained PostgreSQL data, separate worker                                           | Fresh-task restoration verification                                                                    |
-| Target and scope       | Synthetic targets, phone-registration allowlisting, immutable bounds, queue locking and bounded reruns               | Provider-enforced duration, cancellation and cost limits                                               |
-| Policy and evaluation  | One versioned phone-change policy, trusted verification checks, graded evidence and explicit unknown outcomes        | Broader policies after the first live case                                                             |
-| Caller runtime         | Deterministic fixture, narrow Bolna boundary and read-only connection-check implementation                           | Credential verification, autonomous spoken dispatch and reconciliation                                 |
-| Evidence               | Synthetic transcripts, normalized events, actual fixture tool writes and SQL readbacks, protected ingestion contract | Customer connector, live callbacks, recordings, finalized costs and correlation                        |
-| Review and regressions | Findings, review history, configuration digests, bounded reruns and JSON exports                                     | Validation with actual live artifacts                                                                  |
-| Interface and guides   | Responsive landing/workspace, original mascots, accessible controls and seven guides                                 | User feedback and further assistive-technology testing                                                 |
-| Production operation   | Loopback binding, input validation, secret isolation and public-file boundary                                        | Authentication, tenant isolation, retention/redaction, encryption, monitoring, recovery and deployment |
+| Brief capability         | Implemented code                                                                                                                        | Acceptance still required                                                           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Authorized target        | Fixture and operator-allowlisted PSTN registration with authorization reference                                                         | Verify the recipient is owned or explicitly authorized                              |
+| Bounded campaign         | Immutable scope, call slots, global concurrency, durable deadlines, conservative reservations, cancellation and stop handling           | Verify actual provider/carrier limits and the account's all-component price ceiling |
+| Explicit policy          | Versioned phone-change policy with trusted identity-verification precondition                                                           | Instrument the same fictional account and tool in the approved target backend       |
+| Autonomous spoken caller | Isolated Bolna caller per scenario, actual prompt/model capture, dispatch and Twilio control                                            | Verify the configured supported caller and realized conversation                    |
+| Realized evidence        | Provider transcript normalization, actual recording capture, signed backend batches, complete-log marker and encrypted artifact storage | Confirm actual provider fields/audio and trustworthy customer event correlation     |
+| Deterministic evaluation | Trusted event/account/order checks, evidence tiers and explicit unknown outcomes                                                        | Validate control and adversarial outcomes using real artifacts                      |
+| Human review             | Evidence timeline, transcript, audio, terminal findings, review history and privacy controls                                            | Reviewer and accessibility acceptance of the expanded interface                     |
+| Rerun and export         | Captured configuration integrity, bounded rerun and versioned JSON export                                                               | Validate reproduction using the actual caller and customer target                   |
+| Workspace access         | Scrypt passwords, opaque sessions, CSRF, owner/member management, restricted-role PostgreSQL RLS and cross-workspace references         | Authentication, authorization, concurrency and isolation review                     |
+| Operation                | Native Node builds, nonroot Compose services, health/heartbeat checks, maintenance, retention and guarded backup/restore                | Build images, deploy behind HTTPS and exercise recovery                             |
 
-## Working end-to-end path
+Additional runtime providers and SIP/WebSocket/WebRTC transports are optional expansion work. The first implemented live path is PSTN through a Twilio-backed Bolna caller. Custom policy authoring, SSO and email-based recovery are not claimed as part of this first release.
 
-The [application flow](application-flow.md) maps components and source files. A user authorizes a fictional target and bounded scope. The API stores an immutable snapshot and queued cases. A separate worker runs the verified control and false-authority fixture against the same support backend. Tool execution changes a fictional account in PostgreSQL and records independent state observations. The deterministic evaluator checks trusted event order and account identity, then the workspace presents evidence for review, rerun or export.
+## Configuration the operator supplies
 
-The conversation is synthetic. Browser speech synthesis is optional replay, not recorded audio. No live provider authentication or outbound call is claimed as successful.
+Use [Bolna setup](bolna.md), [the provider contract](provider-contract.md), [live orchestration](live-orchestration.md) and [deployment](deployment.md).
 
-## Remaining delivery sequence
+- A supported Bolna caller template and credentials for its Twilio account
+- The exact authorized E.164 target allowlist and authorization reference
+- `VOUCH_SYNTHETIC_CHALLENGE` matching the fictional sandbox account so the benign caller can actually complete verification
+- Correct cost units/currency, finalization semantics and a conservative all-inclusive rate ceiling
+- Exact approved recording hostnames and server-side signing/encryption keys
+- For production, database credentials, an HTTPS origin and initial workspace owner credentials
+- Customer-side instrumentation using the [connector SDK](connector-sdk.md), keeping backend signing keys away from the target LLM
 
-1. Establish supported provider access, verify credentials with a read-only request and configure the caller plus an explicitly authorized target. The last attempted provider request was blocked before authentication could be verified.
-2. Implement provider-supported cancellation and hard duration limits, reserve worst-case budget, persist execution identifiers and reconcile uncertain submissions before retrying. Enforce stop conditions outside the caller prompt.
-3. Implement authenticated callback and recording ingestion plus a customer backend connector. Correlate trusted events to the correct run and account independently of caller statements.
-4. Run one bounded live benign control and one false-authority case. Validate actual transcript/audio, tool activity, backend state, verdict, review, rerun and exported regression. Retain evidence of resource-limit enforcement.
-5. Before public customer use, implement authentication and tenant authorization, secure artifact storage, retention/redaction, monitoring, recovery and deployment checks. Add history pagination before larger datasets.
+The ignored local environment retains the existing provider credential. Missing signing and artifact-encryption keys were generated privately without printing values or replacing existing keys. Live dispatch remains disabled unless an operator explicitly configures and enables it.
 
-Additional runtimes, SIP/WebSocket/WebRTC bridges and broader policy authoring are expansion work. They are not required to prove the first live PSTN case, and none is represented as implemented.
+## Implemented failure behavior
 
-## Verification evidence
+An uncertain submission is not retried automatically. Its reservation and global live slot remain held until a correlated provider execution is recovered. Only a provably unsent preflight failure can release an unused reservation. A known live call is cancelled through verified carrier identity when stop, deadline or authorization changes require it.
 
-The latest application validation passed 60 unit tests, 168 real PostgreSQL/HTTP assertions and three browser suites. Browser checks covered the fixture lifecycle, stale responses and recovery, public Docs, copying, accessibility and layouts from 320 to 2560 pixels. The production build and dependency audit also passed.
+Missing finalized cost remains unresolved. A confirmed duration or billing overrun stops the campaign and records an operational warning. A reservation is an admission bound based on the operator's pricing contract, not a provider-account spending cap.
 
-These results cover the implemented local application. They do not certify the live path or production security. See [acceptance](acceptance.md), [repository audit](repository-audit.md), [performance findings](performance-audit.md), [design verification](../design-qa.md) and [Bolna integration status](bolna.md).
+Final backend evidence is accepted only within the configured delivery window. Missing evidence stays unknown. Actual recording capture can be retried by an owner without inventing audio. Privacy redaction retains provenance digests and backend facts. Isolated caller cleanup must not erase remote execution history before required artifacts are captured or explicitly discarded under policy.
+
+## What was and was not checked
+
+The combined web/native server production build completed successfully, including strict TypeScript compilation. The required database migration also completed successfully. Formatting, shell/JavaScript syntax and static integration review were performed. No unit, integration, browser, load, security-acceptance or voice-call test suite was run for this expansion. The prior 60 unit tests, 168 PostgreSQL/HTTP assertions and three browser suites describe the earlier fixture baseline only.
+
+Existing test harnesses target the earlier fixture API. Their authorization, signed evidence and isolated database setup must be reviewed alongside the new acceptance cases by the team performing testing. Those older results must not be reused as release approval for this implementation.
+
+The [action log](action-log.md) records the implementation and actual build/migration outcomes. The [application flow](application-flow.md) maps components. Release approval depends on the operator's testing and deployment checks.

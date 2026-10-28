@@ -1,3 +1,5 @@
+> Historical fixture baseline. This performance measurements predates the live/authentication expansion. The expanded code received compilation and static review only because acceptance testing was left to the user. See [current handoff](project-status.md).
+
 # Vouch performance and request-flow audit
 
 Measured on 28 October 2026 in the managed development environment. This is a local development audit, not a production load test or service-level guarantee. All HTTP measurements are read-only; browser race fixtures are intercepted in Chromium and never persisted. No provider call was placed.

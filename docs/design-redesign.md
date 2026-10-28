@@ -31,3 +31,7 @@ The scout and builder are original generated Vouch characters with a shared ink-
 OpenCode's pinned public GitHub source and license were accessible and inspected. Direct requests to Tessory's `/llms.txt`, OpenCode's website, Notion and SpaceX were denied by the active cloud network policy. The named brand references therefore inform the requested high-level direction, while only the available licensed OpenCode source is claimed as directly inspected. No Tessory catalog component or linked license is claimed as reviewed or copied. The existing environment draft retains the requested Tessory domain allowance.
 
 Rendered screenshots and verification artifacts are retained under ignored `artifacts/mission-control/`. See the root `design-qa.md` and the repository audit for the checked surfaces and remaining product limits. New UI work does not enable live calling.
+
+## Live and workspace access expansion
+
+The interface now includes session login, workspace switching, owner access management, gated live campaigns, carrier execution/budget status, provider reconciliation, authenticated real audio, delayed-artifact recovery and owner privacy controls. Public guides describe the implemented provider and signed backend contracts. These added controls were statically reviewed and compiled; browser, accessibility and voice acceptance of this expansion remain with the user. Earlier screenshots and browser results above describe the fixture baseline.
