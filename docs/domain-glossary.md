@@ -14,3 +14,5 @@
 - **Candidate finding**: a deterministic policy violation, awaiting human confirmation or dismissal.
 - **Review**: an auditable human decision that leaves the recorded outcome unchanged.
 - **Regression case**: a versioned export containing the captured configuration, expected policy, observed evidence, and review history.
+- **Configuration digest**: SHA-256 over recursively sorted JSON object keys with array order preserved. The versioned algorithm accompanies the digest; legacy key-order-dependent digests remain explicitly unverifiable after JSONB storage.
+- **Configuration integrity**: whether the exported captured configuration matches its recorded digest under a supported algorithm. It detects content differences; it is not a signature or proof of who supplied the evidence.

@@ -47,12 +47,14 @@ pnpm test
 pnpm test:integration
 # API and worker must be running, and the web build must exist:
 pnpm test:browser
+pnpm test:browser:requests
 pnpm audit
 ```
 
 - Unit tests cover deterministic evidence grading, spoofed spoken verification, account/time correlation, unknown evidence, scope limits, and fail-closed live calls.
 - Integration tests create and reset only a dedicated database whose name ends in `_test` (`vouch_test` by default). They start an isolated API, exercise the real worker and PostgreSQL, check exports/reviews, reject evidence injection, and verify call bounds, stopping, scheduling, and concurrent workers. Override with `TEST_DATABASE_URL`.
 - Browser checks use installed Chromium (`CHROMIUM_PATH` defaults to `/usr/bin/chromium`). They create synthetic campaigns in the running development database and exercise creation, worker outcomes, evidence tabs, review, file download, rerun bounds, mobile overflow, and integration status. Screenshots go to ignored `artifacts/`. They do not place live calls.
+- The separate request-regression browser suite uses intercepted, non-persisted records to verify late responses, overlapping polling, retry, a real 15-second timeout, hidden-tab behavior, cached evidence during refresh failures, and operation without newer `AbortSignal` helpers. See the [performance audit and call graph](docs/performance-audit.md).
 
 ## Evidence and runtime boundaries
 
@@ -63,6 +65,8 @@ pnpm audit
 - `apps/api/src/worker.ts`: PostgreSQL queue and global advisory lock; separate workers cannot execute two cases simultaneously. Run execution and evidence are transactional.
 
 The evaluator distinguishes transcript-only evidence, tool requests, successful tool executions, and backend state observations. A complete backend verification log is necessary to establish an absent precondition. Tool execution without verified identity is a policy violation even if durable state remains unknown. Caller assertions, mismatched accounts, later verification, and target-spoofed events do not satisfy the policy.
+
+New configuration digests use `sha256-sorted-json-v1`: recursively sort object keys by JavaScript UTF-16 string order, preserve array order, serialize as JSON and hash the UTF-8 bytes with SHA-256. The export includes its algorithm and integrity status. This makes digests reproducible after PostgreSQL JSONB storage. Historical key-order-dependent digests remain unchanged and explicitly unverifiable; changed or unsupported new digests cannot be executed or rerun. Stored evidence is evaluated in its recorded sequence even when an imported array is reordered.
 
 External evidence ingestion requires an operator-provided `VOUCH_INGEST_TOKEN` bearer credential and an active live run. Synthetic evidence cannot be altered through that route. The route is not a live connector by itself. Live target evidence, recordings, and final costs remain unimplemented/unverified.
 

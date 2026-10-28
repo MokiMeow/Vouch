@@ -11,6 +11,8 @@ Implemented and exercised in this cloud instance:
 - Reviewer confirmation/dismissal with audit history, same-config bounded rerun, versioned regression JSON export.
 - Responsive findings/report interface; synthetic speech replay is optional and depends on installed browser voices.
 - Unit tests, isolated PostgreSQL integration tests, browser interaction tests, production build and dependency audit.
+- Reproducible configuration digests across JSONB storage, explicit legacy/unverified integrity states, and refusal to run changed captured configurations.
+- Request-race, timeout, retry and cached-evidence recovery checks; bounded background polling and lighter overview responses.
 
 Not completed or claimed:
 
