@@ -14,15 +14,16 @@ import {
   WarningCircleIcon,
   WaveformIcon,
 } from "@phosphor-icons/react";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, dateLabel, label, titleForRun, when } from "../lib";
-import type { Action, Campaign, Navigate, Overview, Run } from "../types";
+import { useEvidence, useOverview } from "../hooks/data";
+import type {
+  Action,
+  Campaign,
+  Navigate,
+  Overview,
+  RunSummary as Run,
+} from "../types";
 import { SetupForm } from "./CampaignForm";
 import {
   ArrowLink,
@@ -132,68 +133,6 @@ function NavItem({
     </Link>
   );
 }
-function shouldPoll(pending: boolean, stopped: boolean) {
-  return !pending && !stopped && document.visibilityState !== "hidden";
-}
-function useOverview(onError: (message: string) => void) {
-  const [data, setData] = useState<Overview | null>(null);
-  const refresh = useCallback(async () => {
-    try {
-      setData(await api("/overview"));
-    } catch (error) {
-      onError((error as Error).message);
-    }
-  }, [onError]);
-  useEffect(() => {
-    let stopped = false,
-      pending = false;
-    async function update() {
-      if (!shouldPoll(pending, stopped)) return;
-      pending = true;
-      try {
-        const next = await api("/overview");
-        if (!stopped) setData(next);
-      } catch (error) {
-        if (!stopped) onError((error as Error).message);
-      } finally {
-        pending = false;
-      }
-    }
-    void update();
-    const timer = setInterval(update, 2500);
-    document.addEventListener("visibilitychange", update);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", update);
-    };
-  }, [onError]);
-  return { data, refresh };
-}
-function useEvidence(path: string, onError: (message: string) => void) {
-  const [run, setRun] = useState<Run | null>(null);
-  const runId = path.startsWith("/app/runs/") ? path.split("/")[3] : null;
-  const refresh = useCallback(async () => {
-    if (!runId) return;
-    try {
-      setRun(await api(`/runs/${runId}`));
-    } catch (error) {
-      onError((error as Error).message);
-    }
-  }, [runId, onError]);
-  useEffect(() => {
-    setRun(null);
-    if (!runId) return;
-    const controller = new AbortController();
-    api(`/runs/${runId}`, undefined, controller.signal)
-      .then(setRun)
-      .catch((error) => {
-        if (error.name !== "AbortError") onError(error.message);
-      });
-    return () => controller.abort();
-  }, [runId, onError]);
-  return { run, runId, refresh };
-}
 function useTimedNotice() {
   const [notice, setNotice] = useState("");
   useEffect(() => {
@@ -215,7 +154,7 @@ export function Workspace({
     [modal, setModal] = useState<ModalSettings>(null);
   const { notice, setNotice } = useTimedNotice();
   const { data, refresh } = useOverview(setError);
-  const evidence = useEvidence(path, setError);
+  const evidence = useEvidence(path);
   const page = pageFor(path);
   useEffect(() => {
     document.title = `${evidence.runId ? "Evidence" : page} — Vouch`;
@@ -352,15 +291,44 @@ type ContentProps = {
 function WorkspaceContent(props: ContentProps) {
   const { evidence, navigate, action } = props;
   if (!evidence.runId) return <WorkspacePage {...props} />;
+  if (evidence.error && !evidence.run)
+    return (
+      <div className="loading-state" role="alert">
+        <WarningCircleIcon size={23} />
+        <h1>Evidence unavailable.</h1>
+        <p>{evidence.error}</p>
+        <button className="text-button" onClick={() => void evidence.refresh()}>
+          Try again <ArrowClockwiseIcon size={17} />
+        </button>
+        <button className="text-button" onClick={() => navigate("/app")}>
+          Back to workspace
+        </button>
+      </div>
+    );
   if (evidence.run)
     return (
-      <RunDetail
-        key={evidence.run.id}
-        run={evidence.run}
-        back={() => navigate("/app")}
-        onUpdate={evidence.refresh}
-        action={action}
-      />
+      <>
+        {evidence.error && (
+          <div className="notice error" role="alert">
+            <WarningCircleIcon size={20} />
+            <span>{evidence.error}</span>
+            <span>Showing the last fetched evidence.</span>
+            <button
+              className="text-button"
+              onClick={() => void evidence.refresh()}
+            >
+              Retry update
+            </button>
+          </div>
+        )}
+        <RunDetail
+          key={evidence.run.id}
+          run={evidence.run}
+          back={() => navigate("/app")}
+          onUpdate={evidence.refresh}
+          action={action}
+        />
+      </>
     );
   return (
     <div className="loading-state" role="status">
@@ -537,6 +505,15 @@ function CampaignList({
   stop: (id: string) => void;
   expanded?: boolean;
 }) {
+  const byCampaign = useMemo(() => {
+    const grouped = new Map<string, Run[]>();
+    for (const run of runs) {
+      const group = grouped.get(run.campaign_id) ?? [];
+      group.push(run);
+      grouped.set(run.campaign_id, group);
+    }
+    return grouped;
+  }, [runs]);
   return !campaigns.length ? (
     <Empty
       title="Your first campaign starts here."
@@ -557,7 +534,7 @@ function CampaignList({
         <CampaignRow
           key={c.id}
           campaign={c}
-          cases={runs.filter((r) => r.campaign_id === c.id)}
+          cases={byCampaign.get(c.id) ?? []}
           openRun={openRun}
           stop={stop}
           expanded={expanded}
@@ -603,7 +580,7 @@ function FindingRow({ run, open }: { run: Run; open: () => void }) {
         <strong>{titleForRun(run)}</strong>
         <span>
           {run.campaign_name} <span>·</span> {run.target_name}
-          <span>· Synthetic</span>
+          <span>{run.synthetic ? "· Synthetic" : "· Provider evidence"}</span>
         </span>
       </span>
       <Badge tone={view.tone}>{view.caption}</Badge>

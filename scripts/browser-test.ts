@@ -288,6 +288,31 @@ try {
     .getByRole("button", { name: "Stop synthetic speech replay" })
     .click();
   await page.unroute(`**/api/runs/${runId}`);
+  await showRecord({
+    ...recorded,
+    synthetic: false,
+    config_integrity: "mismatch",
+  });
+  await page
+    .getByText("Reported by the target's backend evidence connector", {
+      exact: true,
+    })
+    .waitFor();
+  await page
+    .getByText(
+      "Configuration mismatch: this record differs from its captured digest",
+      { exact: true },
+    )
+    .waitFor();
+  assert.equal(
+    await page
+      .getByText("Independently read from PostgreSQL · fictional account", {
+        exact: true,
+      })
+      .count(),
+    0,
+  );
+  await page.unroute(`**/api/runs/${runId}`);
   await checkpoint();
   await page.goto(runUrl);
   await page

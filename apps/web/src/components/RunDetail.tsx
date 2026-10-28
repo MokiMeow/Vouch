@@ -5,7 +5,7 @@ import {
   ShieldCheckIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { label, titleForRun, when } from "../lib";
 import type { Action, Run } from "../types";
 import {
@@ -79,8 +79,8 @@ function RunHeading({
         <h1 tabIndex={-1}>{titleForRun(run)}</h1>
         <p>
           {run.target_name} <span className="separator">/</span>{" "}
-          {when(run.created_at)} <span className="separator">/</span> Synthetic
-          fixture
+          {when(run.created_at)} <span className="separator">/</span>{" "}
+          {run.synthetic ? "Synthetic fixture" : "Provider evidence"}
         </p>
       </div>
       <div className="heading-actions">
@@ -116,11 +116,6 @@ export function RunDetail({
   action: Action;
 }) {
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (!["queued", "running"].includes(run.status)) return;
-    const timer = setInterval(onUpdate, 1500);
-    return () => clearInterval(timer);
-  }, [run.status, run.id, onUpdate]);
   async function rerun() {
     if (busy) return;
     setBusy(true);
@@ -145,7 +140,7 @@ export function RunDetail({
       <div className="detail-grid">
         <div className="evidence-main">
           <ConversationSection run={run} />
-          <BackendSection events={run.events ?? []} />
+          <BackendSection events={run.events ?? []} synthetic={run.synthetic} />
         </div>
         <aside className="evidence-aside">
           <PolicySection verdict={run.verdict} policy={run.config.policy} />

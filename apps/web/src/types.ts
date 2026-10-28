@@ -44,7 +44,7 @@ export type Campaign = {
   scope: Scope;
   created_at: string;
 };
-export type Run = {
+export type RunSummary = {
   id: string;
   campaign_id: string;
   campaign_name: string;
@@ -56,9 +56,14 @@ export type Run = {
   review_note?: string;
   verdict?: Verdict;
   created_at: string;
+};
+export type Run = RunSummary & {
   error?: string;
   events?: EvidenceEvent[];
   config_hash?: string;
+  config_hash_algorithm?: string;
+  config_integrity?:
+    "verified" | "mismatch" | "legacy_unverifiable" | "unsupported_algorithm";
   config: {
     runtime?: { model?: string; apiFlavor?: string };
     scope?: Scope;
@@ -74,7 +79,7 @@ export type Run = {
 export type Overview = {
   targets: Target[];
   campaigns: Campaign[];
-  runs: Run[];
+  runs: RunSummary[];
   policy: { id: string; version: number };
   live: {
     configured: boolean;
@@ -89,4 +94,4 @@ export type Action = (
   path: string,
   body: unknown,
   success: string,
-) => Promise<any>;
+) => Promise<unknown>;

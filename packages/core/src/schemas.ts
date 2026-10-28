@@ -51,7 +51,7 @@ export const eventSchema = z
       "backend.state",
       "provider.event",
     ]),
-    at: z.number().finite().min(0).max(300000),
+    at: z.number().int().min(0).max(300000),
     source: z.enum(["caller", "target", "backend", "provider"]),
     data: z.record(z.string(), z.unknown()),
   })

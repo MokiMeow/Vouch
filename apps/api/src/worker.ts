@@ -2,7 +2,6 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 import {
   assertScope,
-  policy,
   scenarios,
   scopeSchema,
   type Scope,
@@ -10,6 +9,11 @@ import {
 } from "../../../packages/core/src/index";
 import { db, transaction } from "./db";
 import { executeFixture } from "./fixture";
+import {
+  assertConfigurationHash,
+  canonicalJson,
+  currentPolicySchema,
+} from "./configuration";
 type Job = {
   id: string;
   campaign_id: string;
@@ -17,17 +21,14 @@ type Job = {
   synthetic: boolean;
   scope: Scope;
   config: unknown;
+  config_hash: string;
+  config_hash_algorithm: string;
   campaign_status: string;
 };
 const configSchema = z.object({
   mode: z.literal("fixture"),
-  policy: z.object({
-    id: z.literal(policy.id),
-    version: z.literal(policy.version),
-    tool: z.literal(policy.tool),
-    precondition: z.literal(policy.precondition),
-    forbiddenOutcome: z.literal(policy.forbiddenOutcome),
-  }),
+  policy: currentPolicySchema,
+  scope: scopeSchema,
   runtime: z.object({
     provider: z.literal("vouch-fixture"),
     apiFlavor: z.literal("fixture-v1"),
@@ -39,6 +40,11 @@ function isScenario(name: string): name is keyof typeof scenarios {
   return Object.hasOwn(scenarios, name);
 }
 function validateConfiguration(job: Job) {
+  assertConfigurationHash(
+    job.config,
+    job.config_hash,
+    job.config_hash_algorithm,
+  );
   if (!isScenario(job.scenario))
     throw new Error("The captured scenario is not supported by this runtime");
   const parsed = configSchema.safeParse(job.config);
@@ -46,6 +52,8 @@ function validateConfiguration(job: Job) {
     throw new Error(
       "The captured fixture configuration is incompatible with this runtime",
     );
+  if (canonicalJson(parsed.data.scope) !== canonicalJson(job.scope))
+    throw new Error("The captured scope no longer matches this campaign");
   const captured = parsed.data.scenarios[job.scenario];
   if (!captured) throw new Error("The captured scenario is missing");
   if (
@@ -117,7 +125,12 @@ export async function tick() {
     )
       return false;
     const { rows } = await c.query<Job>(
-      `SELECT r.*,c.scope,c.status AS campaign_status FROM runs r JOIN campaigns c ON c.id=r.campaign_id WHERE r.status='queued' AND (c.scope->>'startsAt')::timestamptz<=now() ORDER BY r.created_at,r.scenario LIMIT 1 FOR UPDATE OF r,c SKIP LOCKED`,
+      `SELECT r.*,c.scope,c.config_hash,c.config_hash_algorithm,c.status AS campaign_status
+       FROM runs r JOIN campaigns c ON c.id=r.campaign_id
+       WHERE r.status='queued'
+         AND CASE WHEN pg_input_is_valid(c.scope->>'startsAt','timestamptz')
+           THEN (c.scope->>'startsAt')::timestamptz<=now() ELSE true END
+       ORDER BY r.created_at,r.scenario LIMIT 1 FOR UPDATE OF r,c SKIP LOCKED`,
     );
     const job = rows[0];
     if (!job) return false;

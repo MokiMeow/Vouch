@@ -49,6 +49,20 @@ const scope: Scope = {
   stopOnFinding: false,
 };
 describe("deterministic policy evaluation", () => {
+  it("uses authoritative event sequence when a regression file is reordered", () => {
+    const verification = { ...verified, seq: 4, at: 4000 };
+    const second = { ...execution, seq: 6, at: 6000 };
+    const third = { ...execution, seq: 9, at: 9000 };
+    const laterState = { ...state, seq: 7, at: 7000 };
+    const log = { ...complete, seq: 10, at: 10000 };
+    expect(
+      evaluate([third, execution, second, verification, laterState, log]),
+    ).toMatchObject({
+      outcome: "violation",
+      tier: "tool_executed",
+      stateChanged: null,
+    });
+  });
   it("proves an unauthorized durable change", () =>
     expect(evaluate([request, execution, state, complete])).toMatchObject({
       outcome: "violation",

@@ -4,17 +4,25 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import {
   capturedPolicySchema,
+  assertScope,
   evaluate,
   eventSchema,
   policy,
   scenarios,
   scopeSchema,
   targetSchema,
-  type Scope,
 } from "../../../packages/core/src/index";
 import { BolnaRuntime } from "./bolna";
 import { db, transaction } from "./db";
 import { appendEvent } from "./fixture";
+import {
+  CONFIG_HASH_ALGORITHM,
+  assertConfigurationHash,
+  canonicalJson,
+  configurationHash,
+  configurationIntegrity,
+  currentPolicySchema,
+} from "./configuration";
 import { publicSite } from "./public-site";
 const app = express();
 app.disable("x-powered-by");
@@ -46,12 +54,14 @@ app.get("/api/health", async (_req, res) => {
 });
 app.get("/api/overview", async (_req, res) => {
   const [targets, campaigns, runs] = await Promise.all([
-    db.query("SELECT * FROM targets ORDER BY created_at DESC"),
     db.query(
-      "SELECT c.*,t.name AS target_name FROM campaigns c JOIN targets t ON t.id=c.target_id ORDER BY c.created_at DESC",
+      "SELECT id,name,transport,phone,authorization_reference,created_at FROM targets ORDER BY created_at DESC",
     ),
     db.query(
-      "SELECT r.*,c.name AS campaign_name,t.name AS target_name FROM runs r JOIN campaigns c ON c.id=r.campaign_id JOIN targets t ON t.id=c.target_id ORDER BY r.created_at DESC",
+      "SELECT c.id,c.name,c.target_id,c.mode,c.scope,c.status,c.calls_used,c.created_at,t.name AS target_name FROM campaigns c JOIN targets t ON t.id=c.target_id ORDER BY c.created_at DESC",
+    ),
+    db.query(
+      "SELECT r.id,r.campaign_id,r.scenario,r.status,r.synthetic,r.verdict,r.review,r.created_at,c.name AS campaign_name,t.name AS target_name FROM runs r JOIN campaigns c ON c.id=r.campaign_id JOIN targets t ON t.id=c.target_id ORDER BY r.created_at DESC",
     ),
   ]);
   res.json({
@@ -129,19 +139,26 @@ app.post("/api/campaigns", async (req, res) => {
         model: "vouch-fixture-state-machine@1",
       },
     };
-    const configHash = createHash("sha256")
-      .update(JSON.stringify(config))
-      .digest("hex");
+    const configHash = configurationHash(config);
     await c.query(
-      "INSERT INTO campaigns(id,name,target_id,mode,scope,config,config_hash,calls_used) VALUES($1,$2,$3,$4,$5,$6,$7,2)",
-      [id, input.name, t.id, "fixture", input.scope, config, configHash],
+      "INSERT INTO campaigns(id,name,target_id,mode,scope,config,config_hash,config_hash_algorithm,calls_used) VALUES($1,$2,$3,$4,$5,$6,$7,$8,2)",
+      [
+        id,
+        input.name,
+        t.id,
+        "fixture",
+        input.scope,
+        config,
+        configHash,
+        CONFIG_HASH_ALGORITHM,
+      ],
     );
     for (const scenario of ["benign_control", "false_authority"])
       await c.query(
         "INSERT INTO runs(id,campaign_id,scenario,config) VALUES($1,$2,$3,$4)",
         [randomUUID(), id, scenario, config],
       );
-    return { id, configHash };
+    return { id, configHash, configHashAlgorithm: CONFIG_HASH_ALGORITHM };
   });
   res.status(201).json(output);
 });
@@ -163,7 +180,7 @@ app.get("/api/runs/:id", async (req, res) => {
   const id = routeId(req.params.id);
   const r = (
     await db.query(
-      "SELECT r.*,c.name AS campaign_name,c.config_hash,t.name AS target_name FROM runs r JOIN campaigns c ON c.id=r.campaign_id JOIN targets t ON t.id=c.target_id WHERE r.id=$1",
+      "SELECT r.*,c.name AS campaign_name,c.config_hash,c.config_hash_algorithm,t.name AS target_name FROM runs r JOIN campaigns c ON c.id=r.campaign_id JOIN targets t ON t.id=c.target_id WHERE r.id=$1",
       [id],
     )
   ).rows[0];
@@ -179,6 +196,11 @@ app.get("/api/runs/:id", async (req, res) => {
   ).rows;
   res.json({
     ...r,
+    config_integrity: configurationIntegrity(
+      r.config,
+      r.config_hash,
+      r.config_hash_algorithm,
+    ),
     events,
     reviews,
     recording: {
@@ -219,7 +241,7 @@ app.post("/api/runs/:id/rerun", async (req, res) => {
   const output = await transaction(async (c) => {
     const original = (
       await c.query(
-        "SELECT r.*,c.scope,c.status AS campaign_status,c.calls_used FROM runs r JOIN campaigns c ON c.id=r.campaign_id WHERE r.id=$1 FOR UPDATE OF c",
+        "SELECT r.*,c.scope,c.status AS campaign_status,c.calls_used,c.config_hash,c.config_hash_algorithm FROM runs r JOIN campaigns c ON c.id=r.campaign_id WHERE r.id=$1 FOR UPDATE OF c",
         [routeId(req.params.id)],
       )
     ).rows[0];
@@ -230,16 +252,15 @@ app.post("/api/runs/:id/rerun", async (req, res) => {
       );
     if (original.status !== "completed" && original.status !== "failed")
       throw new Error("Wait for the original run to finish");
-    const s = original.scope as Scope;
-    if (
-      Date.now() < Date.parse(s.startsAt) ||
-      Date.now() >= Date.parse(s.endsAt)
-    )
-      throw new Error("Outside the authorized time window");
-    if (original.calls_used >= s.maxCalls)
-      throw new Error(
-        "Maximum call count reached. Create a new authorized campaign.",
-      );
+    const s = scopeSchema.parse(original.scope);
+    assertConfigurationHash(
+      original.config,
+      original.config_hash,
+      original.config_hash_algorithm,
+    );
+    if (canonicalJson(original.config.scope) !== canonicalJson(s))
+      throw new Error("The captured scope no longer matches this campaign");
+    assertScope(s, Date.now(), original.calls_used);
     const id = randomUUID();
     await c.query(
       "INSERT INTO runs(id,campaign_id,scenario,synthetic,config) VALUES($1,$2,$3,$4,$5)",
@@ -263,7 +284,7 @@ app.get("/api/runs/:id/export", async (req, res) => {
   const id = routeId(req.params.id);
   const r = (
     await db.query(
-      "SELECT r.*,c.config_hash FROM runs r JOIN campaigns c ON c.id=r.campaign_id WHERE r.id=$1",
+      "SELECT r.*,c.config_hash,c.config_hash_algorithm FROM runs r JOIN campaigns c ON c.id=r.campaign_id WHERE r.id=$1",
       [id],
     )
   ).rows[0];
@@ -285,6 +306,12 @@ app.get("/api/runs/:id/export", async (req, res) => {
     synthetic: r.synthetic,
     scenario: r.scenario,
     configHash: r.config_hash,
+    configHashAlgorithm: r.config_hash_algorithm,
+    configIntegrity: configurationIntegrity(
+      r.config,
+      r.config_hash,
+      r.config_hash_algorithm,
+    ),
     config: r.config,
     expected: {
       tool: capturedPolicy.tool,
@@ -315,14 +342,20 @@ app.post("/api/runs/:id/evidence", async (req, res) => {
   const event = eventSchema.parse(req.body);
   await transaction(async (c) => {
     const r = (
-      await c.query("SELECT * FROM runs WHERE id=$1 FOR UPDATE", [
-        routeId(req.params.id),
-      ])
+      await c.query(
+        "SELECT r.*,c.scope,c.config_hash,c.config_hash_algorithm FROM runs r JOIN campaigns c ON c.id=r.campaign_id WHERE r.id=$1 FOR UPDATE OF r,c",
+        [routeId(req.params.id)],
+      )
     ).rows[0];
     if (!r || r.synthetic || r.status !== "running")
       throw new Error(
         "External ingestion requires an active live run; fixture evidence is immutable",
       );
+    currentPolicySchema.parse(r.config.policy);
+    assertConfigurationHash(r.config, r.config_hash, r.config_hash_algorithm);
+    const scope = scopeSchema.parse(r.scope);
+    if (canonicalJson(r.config.scope) !== canonicalJson(scope))
+      throw new Error("The captured scope no longer matches this campaign");
     await appendEvent(c, r.id, event);
     const events = (
       await c.query("SELECT * FROM events WHERE run_id=$1 ORDER BY seq", [r.id])
@@ -347,19 +380,47 @@ app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API route not found" });
 });
 app.use(publicSite);
-type ErrorResponse={status:number;message:string};
-function bodyParserFailure(error:unknown):ErrorResponse|null{
- if(!error||typeof error!=='object'||!('type' in error))return null;
- const failures:Record<string,ErrorResponse>={'entity.parse.failed':{status:400,message:'Malformed JSON body'},'entity.too.large':{status:413,message:'Request body exceeds the supported limit'}};
- return failures[String(error.type)]??null;
+type ErrorResponse = { status: number; message: string };
+function bodyParserFailure(error: unknown): ErrorResponse | null {
+  if (!error || typeof error !== "object" || !("type" in error)) return null;
+  const failures: Record<string, ErrorResponse> = {
+    "entity.parse.failed": { status: 400, message: "Malformed JSON body" },
+    "entity.too.large": {
+      status: 413,
+      message: "Request body exceeds the supported limit",
+    },
+  };
+  return failures[String(error.type)] ?? null;
 }
-function isDatabaseError(error:unknown){return !!(error&&typeof error==='object'&&'code' in error);}
-function applicationFailure(error:unknown):ErrorResponse{
- if(error instanceof z.ZodError)return {status:400,message:error.issues.map(issue=>`${issue.path.join('.')}: ${issue.message}`).join('; ')};
- if(isDatabaseError(error))return {status:500,message:'Database operation failed'};
- return {status:400,message:error instanceof Error?error.message:'Unexpected server error'};
+function isDatabaseError(error: unknown) {
+  return !!(error && typeof error === "object" && "code" in error);
 }
-app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{const failure=bodyParserFailure(error)??applicationFailure(error);res.status(failure.status).json({error:failure.message});});
+function applicationFailure(error: unknown): ErrorResponse {
+  if (error instanceof z.ZodError)
+    return {
+      status: 400,
+      message: error.issues
+        .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+        .join("; "),
+    };
+  if (isDatabaseError(error))
+    return { status: 500, message: "Database operation failed" };
+  return {
+    status: 400,
+    message: error instanceof Error ? error.message : "Unexpected server error",
+  };
+}
+app.use(
+  (
+    error: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    const failure = bodyParserFailure(error) ?? applicationFailure(error);
+    res.status(failure.status).json({ error: failure.message });
+  },
+);
 const host = process.env.HOST ?? "127.0.0.1";
 if (host !== "127.0.0.1" && host !== "localhost")
   throw new Error(

@@ -75,7 +75,7 @@ function AudioPlayer({ transcript }: { transcript: EvidenceEvent[] }) {
           )}
         </button>
         <div>
-          <strong>Synthetic transcript replay</strong>
+          <strong>Transcript replay · synthetic voice</strong>
           <span>Browser speech · not a call recording</span>
         </div>
         <div className={`wave ${playing ? "playing" : ""}`} aria-hidden="true">
@@ -213,7 +213,7 @@ export function ConversationSection({ run }: { run: Run }) {
           <span className="eyebrow">01 / THE CONVERSATION</span>
           <h2>Every word, in context.</h2>
         </div>
-        <Badge>Synthetic</Badge>
+        <Badge>{run.synthetic ? "Synthetic" : "Provider evidence"}</Badge>
       </div>
       <AudioPlayer transcript={transcript} />
       <div className="tabs" role="tablist" aria-label="Evidence views">
@@ -249,7 +249,13 @@ export function ConversationSection({ run }: { run: Run }) {
     </section>
   );
 }
-function StateChange({ event }: { event: EvidenceEvent }) {
+function StateChange({
+  event,
+  synthetic,
+}: {
+  event: EvidenceEvent;
+  synthetic: boolean;
+}) {
   return (
     <div className="state-diff">
       <div>
@@ -270,12 +276,20 @@ function StateChange({ event }: { event: EvidenceEvent }) {
       </div>
       <p>
         <ShieldCheckIcon size={17} />
-        Independently read from PostgreSQL · fictional account
+        {synthetic
+          ? "Independently read from PostgreSQL · fictional account"
+          : "Reported by the target's backend evidence connector"}
       </p>
     </div>
   );
 }
-export function BackendSection({ events }: { events: EvidenceEvent[] }) {
+export function BackendSection({
+  events,
+  synthetic,
+}: {
+  events: EvidenceEvent[];
+  synthetic: boolean;
+}) {
   const states = events.filter(
     (e) => e.kind === "backend.state" && e.source === "backend",
   );
@@ -289,7 +303,9 @@ export function BackendSection({ events }: { events: EvidenceEvent[] }) {
         <CodeIcon size={23} weight="light" />
       </div>
       {states.length ? (
-        states.map((e) => <StateChange event={e} key={e.id} />)
+        states.map((e) => (
+          <StateChange event={e} synthetic={synthetic} key={e.id} />
+        ))
       ) : (
         <p className="empty-evidence">
           Backend state evidence is unknown. No side effect is inferred from the

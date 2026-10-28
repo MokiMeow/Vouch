@@ -15,7 +15,8 @@
     "build": "tsc --noEmit && vite build --config apps/web/vite.config.ts",
     "test": "vitest run",
     "test:integration": "tsx apps/api/test/integration.ts",
-    "test:browser": "tsx scripts/browser-test.ts"
+    "test:browser": "tsx scripts/browser-test.ts",
+    "test:browser:requests": "tsx scripts/browser-race-test.ts"
   },
   "dependencies": {
     "@fontsource/geist": "5.3.0",

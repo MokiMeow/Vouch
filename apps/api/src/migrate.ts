@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS events(id uuid PRIMARY KEY,run_id uuid NOT NULL REFER
 CREATE TABLE IF NOT EXISTS accounts(run_id uuid PRIMARY KEY REFERENCES runs(id),account_id text NOT NULL DEFAULT 'SYN-1042',phone text NOT NULL,verified boolean NOT NULL DEFAULT false);
 CREATE TABLE IF NOT EXISTS reviews(id uuid PRIMARY KEY,run_id uuid NOT NULL REFERENCES runs(id),decision text NOT NULL,note text NOT NULL,created_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS runs_queue ON runs(status,created_at);
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS config_hash_algorithm text NOT NULL DEFAULT 'sha256-json-stringify-v1';
 `);
 }
 if (import.meta.url === new URL(process.argv[1], "file:").href) {

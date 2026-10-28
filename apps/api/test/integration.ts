@@ -1,5 +1,6 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import pg from "pg";
@@ -268,6 +269,15 @@ try {
   const runs = overview.runs.filter((r: any) => r.campaign_id === c.id);
   assert.equal(runs.length, 2);
   assert.ok(runs.every((r: any) => r.status === "completed"));
+  assert.ok(
+    overview.runs.every((r: any) => !Object.hasOwn(r, "config")),
+    "Polling summaries must not repeat captured configuration",
+  );
+  assert.ok(
+    overview.campaigns.every((r: any) => !Object.hasOwn(r, "config")),
+    "Campaign summaries must not repeat captured configuration",
+  );
+  checks += 2;
   const attack = runs.find((r: any) => r.scenario === "false_authority"),
     benign = runs.find((r: any) => r.scenario === "benign_control");
   assert.equal(attack.verdict.outcome, "violation");
@@ -310,7 +320,26 @@ try {
   assert.equal(exported.configHash, c.configHash);
   assert.equal(exported.review.history.length, 2);
   assert.equal(exported.synthetic, true);
+  assert.equal(exported.configIntegrity, "verified");
+  assert.equal(exported.configHashAlgorithm, "sha256-sorted-json-v1");
+  assert.equal(detail.config_integrity, "verified");
+  checks += 3;
   checks += 4;
+  const canonical = JSON.stringify(exported.config, (_key, value) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.entries(value).sort(([a], [b]) =>
+            a < b ? -1 : a > b ? 1 : 0,
+          ),
+        )
+      : value,
+  );
+  assert.equal(
+    exported.configHash,
+    createHash("sha256").update(canonical).digest("hex"),
+    "An exported configuration digest must be reproducible after PostgreSQL JSONB storage",
+  );
+  checks++;
   for (let i = 0; i < 2; i++) {
     const r = await call(`/runs/${attack.id}/rerun`, {}, 201);
     await tick();
@@ -468,6 +497,9 @@ try {
     "incompatible_runtime",
     "missing_scenario",
     "changed_prompt",
+    "changed_scope",
+    "changed_digest",
+    "unknown_digest_algorithm",
   ]) {
     const configCase = await call(
       "/campaigns",
@@ -480,6 +512,18 @@ try {
         [configCase.id],
       )
     ).rows;
+    if (
+      [
+        "unknown_category",
+        "incompatible_runtime",
+        "missing_scenario",
+        "changed_prompt",
+      ].includes(kind)
+    )
+      await db.query(
+        "UPDATE campaigns SET config_hash_algorithm='sha256-json-stringify-v1' WHERE id=$1",
+        [configCase.id],
+      );
     if (kind === "unknown_category")
       await db.query("UPDATE runs SET scenario=$2 WHERE id=$1", [
         jobs[0].id,
@@ -500,6 +544,21 @@ try {
         "UPDATE runs SET config=jsonb_set(config,'{scenarios,false_authority,prompt}',to_jsonb('Changed without new version'::text)) WHERE campaign_id=$1",
         [configCase.id],
       );
+    if (kind === "changed_scope")
+      await db.query(
+        "UPDATE campaigns SET scope=jsonb_set(scope,'{budgetCents}','1'::jsonb) WHERE id=$1",
+        [configCase.id],
+      );
+    if (kind === "changed_digest")
+      await db.query("UPDATE campaigns SET config_hash=$2 WHERE id=$1", [
+        configCase.id,
+        "0".repeat(64),
+      ]);
+    if (kind === "unknown_digest_algorithm")
+      await db.query(
+        "UPDATE campaigns SET config_hash_algorithm='unsupported' WHERE id=$1",
+        [configCase.id],
+      );
     await tick();
     await tick();
     const guard = await call("/overview");
@@ -514,6 +573,46 @@ try {
     checks += 2;
   }
   // Exercise the authenticated connector boundary without claiming a real call.
+  const malformedSchedule = await call(
+    "/campaigns",
+    {
+      name: "Malformed schedule must not poison the queue",
+      targetId: t.id,
+      scope: scope(),
+    },
+    201,
+  );
+  await db.query(
+    "UPDATE campaigns SET scope=jsonb_set(scope,'{startsAt}',to_jsonb('not-a-date'::text)) WHERE id=$1",
+    [malformedSchedule.id],
+  );
+  await assert.doesNotReject(
+    () => tick(),
+    "One malformed stored schedule must not abort all queue selection",
+  );
+  await tick();
+  const healthyAfter = await call(
+    "/campaigns",
+    {
+      name: "Healthy campaign after malformed schedule",
+      targetId: t.id,
+      scope: scope(),
+    },
+    201,
+  );
+  await tick();
+  await tick();
+  const recoveredQueue = await call("/overview");
+  assert.equal(
+    recoveredQueue.campaigns.find((c: any) => c.id === malformedSchedule.id)
+      .status,
+    "failed",
+  );
+  assert.equal(
+    recoveredQueue.campaigns.find((c: any) => c.id === healthyAfter.id).status,
+    "completed",
+  );
+  checks += 3;
   const telemetry = await call(
     "/campaigns",
     { name: "Connector telemetry contract", targetId: t.id, scope: scope() },
@@ -584,6 +683,31 @@ try {
   assert.equal(ingested.verdict.outcome, "violation");
   assert.equal(ingested.events.length, 4);
   checks += 2;
+  await call(
+    `/runs/${telemetryJob.id}/evidence`,
+    { kind: "provider.event", source: "backend", at: 0.5, data: {} },
+    400,
+    auth,
+  );
+  await db.query(
+    "UPDATE runs SET config=jsonb_set(config,'{policy,precondition}',to_jsonb('legacy.identity_verified'::text)) WHERE id=$1",
+    [telemetryJob.id],
+  );
+  const incompatiblePolicy = await call(
+    `/runs/${telemetryJob.id}/evidence`,
+    { kind: "provider.event", source: "backend", at: 5000, data: {} },
+    400,
+    auth,
+  );
+  assert.match(incompatiblePolicy.error, /precondition/);
+  const rejectedEvidence = await call(`/runs/${telemetryJob.id}`);
+  assert.equal(
+    rejectedEvidence.events.length,
+    4,
+    "Rejected evidence must not append events or reinterpret a historical policy",
+  );
+  assert.equal(rejectedEvidence.config_integrity, "mismatch");
+  checks += 3;
   console.log(
     `Integration passed: ${checks} HTTP and evidence assertions, real PostgreSQL, isolated test database.`,
   );

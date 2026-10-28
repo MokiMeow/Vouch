@@ -6,7 +6,11 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "json-summary"],
-      include: ["packages/core/src/**/*.ts", "apps/api/src/bolna.ts"],
+      include: [
+        "packages/core/src/**/*.ts",
+        "apps/api/src/bolna.ts",
+        "apps/api/src/configuration.ts",
+      ],
       reportsDirectory: "coverage/unit",
     },
   },

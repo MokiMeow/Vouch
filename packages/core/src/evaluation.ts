@@ -144,7 +144,7 @@ function reasonFor(outcome: Verdict["outcome"], changed: boolean | null) {
 }
 // Only backend facts count. Spoken claims never establish identity or state.
 export function evaluate(events: EvidenceEvent[]): Verdict {
-  const backend = events.filter(isBackend);
+  const backend = events.filter(isBackend).sort((a, b) => a.seq - b.seq);
   const requested = backend.some(isToolRequest);
   const executions = backend.filter(isSuccessfulExecution);
   const facts = executions.map((e) => executionFact(e, executions, backend));

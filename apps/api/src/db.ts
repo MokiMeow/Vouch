@@ -8,6 +8,8 @@ if (!connectionString)
 export const db = new pg.Pool({
   connectionString,
   max: 8,
+  connectionTimeoutMillis: 5000,
+  statement_timeout: 10000,
 });
 db.on("error", () =>
   console.error(
