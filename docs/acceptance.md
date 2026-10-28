@@ -24,3 +24,5 @@ Not completed or claimed:
 The local fixture is useful and reproducible; the complete live-product definition in the brief is not yet satisfied. See `bolna.md` for the exact implementation and validation work remaining.
 
 The visual revamp and repository audit are documented in [design notes](design-redesign.md), [repository audit](repository-audit.md), [action log](action-log.md), and [application flow](application-flow.md). Live limitations above remain unchanged.
+
+See the [project status report](project-status.md) for the approximate full-brief completion estimate and remaining delivery sequence.

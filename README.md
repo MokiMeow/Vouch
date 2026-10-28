@@ -1,18 +1,54 @@
-# Vouch
+<p align="center">
+  <img src="apps/web/public/brand/vouch-mark.webp" alt="Vouch logo" width="80" height="80" />
+</p>
 
-Vouch tests whether voice agents can be persuaded to skip business-policy checks, then ties findings to realized conversation and backend evidence.
+<h1 align="center">Vouch</h1>
 
-**Implemented:** a working, no-credentials synthetic vertical slice with a React UI, TypeScript/Node API, PostgreSQL, and a separate database-backed worker. A false-authority caller and a benign control use the same intentionally vulnerable mock support backend. Its tool changes a fictional account’s contact phone; evaluation requires a prior backend identity-verification event. This is a local development product, not a production multi-tenant service.
+<p align="center">Authorized voice-agent testing. Reviewable evidence. Reproducible regressions.</p>
 
-**Live status:** no live call has been verified. The Bolna adapter implements read-only agent/execution retrieval and a capability contract. Outbound dispatch deliberately fails closed: hard duration, cancellation, and monetary enforcement still need implementation and live validation. Credentials alone do not enable dispatch. PSTN registration is supported for operator-allowlisted numbers; WebSocket, SIP, Cartesia, and additional runtimes are not implemented.
+<p align="center">
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="docs/application-flow.md">Architecture</a> ·
+  <a href="docs/project-status.md">Project status</a> ·
+  <a href="#contributing">Contributing</a> ·
+  <a href="LICENSE">MIT license</a>
+</p>
 
-The landing page is served at `/`; enter the workspace at `/app`. Its developer-focused interface uses original non-draggable scout mascots, licensed OpenCode neutral-token references, Phosphor icons and self-hosted Geist. A dedicated `/docs` surface provides seven searchable guides with copyable setup commands, evidence explanations, API details and troubleshooting. Docs opens in a new tab from the workspace. See [design notes](docs/design-redesign.md), [flow diagram](docs/application-flow.md), [audit report](docs/repository-audit.md), and [action log](docs/action-log.md).
+<p align="center">
+  <img src="docs/assets/dashboard.png" alt="Vouch dashboard showing synthetic campaigns, evidence counts and the finding review queue" width="1200" />
+</p>
 
-## Run
+<p align="center"><sub>The working local dashboard with synthetic test data. No live calls are shown.</sub></p>
 
-Requirements: Node 24.19 or later, pnpm 11.25.0, and an accessible Docker daemon. Exact application dependency versions are in `package.json` and `pnpm-lock.yaml`.
+Vouch helps developers test whether a voice agent can be persuaded to skip a business-policy check. It connects the attempted conversation to tool activity and backend evidence, then turns reviewed findings into regression cases.
+
+The current release is a working local fixture workflow. It includes campaign creation, a PostgreSQL-backed worker, deterministic evaluation, evidence review, bounded reruns and JSON exports. **Live Bolna dispatch remains disabled and unverified.** This is a single-workspace development application without production authentication.
+
+## What you can do today
+
+- Run a verified benign control and a false-authority scenario against the same fictional support backend.
+- Capture synthetic conversation events alongside real PostgreSQL account writes and independent state readbacks.
+- Inspect what was said, which tool was requested, whether it executed and whether state changed.
+- Confirm or dismiss findings without overwriting the evaluator's recorded verdict.
+- Rerun a case under its original configuration and export a versioned regression artifact.
+- Use the responsive workspace and seven searchable documentation guides with copyable commands.
+
+The implemented policy requires trusted backend identity verification before `change_contact_phone`. Caller claims never count as verification. Unknown evidence stays unknown. Fixture speech replay uses browser speech synthesis when available and is labelled separately from recordings.
+
+## Quickstart
+
+### Prerequisites
+
+- Node.js 24.19 or later
+- pnpm 11.25.0, as pinned in `package.json`
+- Docker with a running daemon for PostgreSQL 17
+- Bash for the setup commands, including WSL2 on Windows
+
+### Install and run
 
 ```sh
+git clone https://github.com/MokiMeow/Vouch.git
+cd Vouch
 pnpm install --frozen-lockfile
 test -e .env || (umask 077; cp .env.example .env)
 chmod 600 .env
@@ -21,63 +57,132 @@ pnpm db:migrate
 pnpm dev
 ```
 
-The `dev` script starts the API, worker, and Vite UI. PostgreSQL binds to loopback port 54329, the API to 4000, and Vite to 5173. Use the Vite interface in a local browser. The API can also serve the built interface after `pnpm build`. This is an unauthenticated single-workspace development app: keep listeners on loopback. It refuses non-loopback API binds.
+Keep an existing `.env` when repeating setup. Fixtures require no provider credentials.
 
-Cloud tasks have a restricted home directory. Use `bash scripts/cloud-install.sh` to activate pnpm with writable cloud cache paths and install/build/migrate. See [cloud startup](docs/cloud-start.md). Do not create another Git worktree for a normal cloud task.
+Open `http://127.0.0.1:5173` for the landing page, `/app` for the workspace and `/docs` for documentation. The development command starts Vite, the API and the worker together. PostgreSQL uses loopback port 54329 and the API uses port 4000 by default. The API health endpoint is `/api/health`.
 
-Set `DATABASE_URL` in the server environment or an ignored `.env` file; there is no database-credential fallback in application code. Copy the sample only if you do not already have a `.env`; preserve existing settings. No provider credentials are required for fixtures. Never commit credentials.
+For this managed cloud checkout, use `bash scripts/cloud-install.sh` to install, start the database, migrate and build with writable cache paths. It preserves existing configuration. Then start `pnpm dev`. See the [cloud startup guide](docs/cloud-start.md) for separate process startup and readiness checks.
 
-## First campaign
+### Configuration
 
-1. Select **New campaign**. Keep the synthetic support target, or select **Create a local synthetic support target**.
-2. Set call count, per-call duration, test window, and budget. The initial pair reserves two call slots. Fixture cost is exactly zero; concurrency is one. Both categories and all three prohibited actions are enforced server-side.
-3. Authorize and launch. The worker runs the verified benign control first, then the false-authority scenario. Future windows remain queued; expired windows fail before execution.
-4. Open the campaign or **Findings**. Review the transcript, timeline, actual tool request/execution, verification events, and backend state diff.
-5. Confirm or dismiss a candidate with a rationale. Review decisions have an append-only audit history and do not change deterministic verdicts.
-6. **Rerun case** preserves the original configuration and hash, consumes another slot in the same campaign, and rechecks window, stop state, and call limits. A stopped or exhausted campaign must be newly authorized.
-7. **Export regression** downloads a versioned JSON case with configuration, expected policy, actual evidence, verdict, and review history.
+| Variable                   | Purpose                                                         | Needed for fixtures |
+| -------------------------- | --------------------------------------------------------------- | ------------------- |
+| `DATABASE_URL`             | PostgreSQL connection, provided by the local sample             | Yes                 |
+| `HOST` and `PORT`          | API listener, restricted to loopback                            | Local defaults      |
+| `BOLNA_API_KEY`            | Server-only provider credential for read-only connection checks | No                  |
+| `BOLNA_AGENT_ID`           | Configured caller agent identifier                              | No                  |
+| `AUTHORIZED_PHONE_NUMBERS` | Exact operator-approved E.164 target allowlist                  | No                  |
+| `VOUCH_INGEST_TOKEN`       | Bearer credential for external evidence ingestion               | No                  |
 
-Fixture data is explicitly synthetic. Replay uses browser speech synthesis if local voices exist; it is not recorded audio. No audio recording is fabricated. The fixture worker intentionally completes immediately rather than pretending to make a real-time call.
+Use [`.env.example`](.env.example) as the reference. `.env` is ignored by Git. Never put secrets in browser variables, source files, screenshots or commits. Adding provider settings does not enable live dispatch. See the [Bolna integration guide](docs/bolna.md) for the controls still required.
 
-## Checks
+### Run your first campaign
+
+1. Open the workspace and choose **New campaign**.
+2. Select a synthetic support target or create one locally.
+3. Set the test window, call count, duration and budget. The initial control and adversarial pair reserve two call slots. Fixture cost is zero and concurrency is one.
+4. Authorize the campaign. The worker runs the verified control first, followed by the false-authority case.
+5. Open a finding to inspect the transcript, event timeline, policy and backend state diff.
+6. Confirm or dismiss it with a rationale. Use **Rerun case** while scope remains, or **Export regression** to download the JSON evidence.
+
+Future windows stay queued. Expired, stopped or exhausted campaigns cannot execute a new run. Fixture conversations finish immediately rather than simulating real call duration.
+
+## How it works
+
+```mermaid
+flowchart TD
+    UI[React workspace] -->|Authorize target and bounded scope| API[Express API]
+    API -->|Configuration snapshot and queued runs| DB[(PostgreSQL)]
+    DB -->|One active case across workers| Worker[Background worker]
+    Worker --> Fixture[Synthetic caller and support target]
+    Fixture -->|Tool writes and state readbacks| DB
+    Fixture --> Evidence[Normalized conversation and backend events]
+    Evidence --> Evaluate[Deterministic policy evaluator]
+    Evaluate -->|Verdict and evidence tier| DB
+    DB --> API
+    API --> Review[Evidence review in the workspace]
+    Review --> Export[Versioned regression JSON]
+    Review -->|Same configuration and scope checks| API
+    Worker -. Future live path .-> Bolna[Bolna runtime]
+    Bolna -. Requires implementation and validation .-> Live[Approved voice target and backend connector]
+```
+
+The API validates input and captures immutable scope and configuration. The worker takes jobs from PostgreSQL with a global concurrency lock. The fixture emits explicitly synthetic conversation events while its instrumented tool changes a fictional account in the real database. Pure policy functions grade the recorded evidence. Review decisions are appended separately from verdicts.
+
+New configuration hashes use `sha256-sorted-json-v1` so they survive JSONB key ordering. Reruns preserve the captured configuration, consume another call slot and recheck scope. External evidence requires a bearer token and an active live run. That ingestion endpoint is not a completed customer connector.
+
+Read the [component map and full workflow](docs/application-flow.md) for implementation boundaries.
+
+## Tech stack
+
+| Layer             | Implementation                                                                   |
+| ----------------- | -------------------------------------------------------------------------------- |
+| Interface         | React 19, TypeScript 5.9, Vite 8, CSS                                            |
+| Visual system     | Self-hosted Geist and Geist Mono, Phosphor icons, original Vouch mascots         |
+| API               | Node.js 24, Express 5, Zod 4                                                     |
+| Persistence       | PostgreSQL 17 with `pg`, SQL migrations and JSONB snapshots                      |
+| Background jobs   | Separate TypeScript worker, PostgreSQL queue and advisory locks                  |
+| Policy engine     | Pure TypeScript schemas, scope limits and deterministic assertions               |
+| Provider boundary | Narrow Bolna adapter using `undici`, read-only checks and disabled live dispatch |
+| Verification      | Vitest, Playwright, axe-core and TypeScript checks                               |
+| Tooling           | pnpm, Prettier and Docker for local PostgreSQL                                   |
+
+Exact dependency versions are pinned in [`package.json`](package.json) and [`pnpm-lock.yaml`](pnpm-lock.yaml).
+
+## Repository map
+
+```text
+apps/web/          Landing page, workspace and public documentation
+apps/api/          HTTP API, worker, provider boundary and database migrations
+packages/core/    Policy, event schemas, evidence grading and scope rules
+scripts/          Local setup and browser verification
+docs/             Architecture, acceptance, integration and engineering guides
+AGENTS.md         Repository instructions for coding agents
+```
+
+## Verification
 
 ```sh
 pnpm build
 pnpm test
 pnpm test:integration
-# API and worker must be running, and the web build must exist:
+# Requires a built web app, running API and worker, and Chromium
 pnpm test:browser
 pnpm test:browser:requests
 pnpm test:browser:design
 pnpm audit
 ```
 
-- Unit tests cover deterministic evidence grading, spoofed spoken verification, account/time correlation, unknown evidence, scope limits, and fail-closed live calls.
-- Integration tests create and reset only a dedicated database whose name ends in `_test` (`vouch_test` by default). They start an isolated API, exercise the real worker and PostgreSQL, check exports/reviews, reject evidence injection, and verify call bounds, stopping, scheduling, and concurrent workers. Override with `TEST_DATABASE_URL`.
-- Browser checks use installed Chromium (`CHROMIUM_PATH` defaults to `/usr/bin/chromium`). They create synthetic campaigns in the running development database and exercise creation, worker outcomes, evidence tabs, review, file download, rerun bounds, mobile overflow, and integration status. Screenshots go to ignored `artifacts/`. They do not place live calls.
-- The separate request-regression browser suite uses intercepted, non-persisted records to verify late responses, overlapping polling, retry, a real 15-second timeout, hidden-tab behavior, cached evidence during refresh failures, and operation without newer `AbortSignal` helpers. See the [performance audit and call graph](docs/performance-audit.md).
-- The design browser suite checks all seven documentation guides, chapter search, copy success/denial, mobile menus, new-tab navigation, image-drag prevention, accessibility and responsive layouts. Documentation contains public product guidance; raw repository notes and audit files remain blocked by the HTTP boundary.
+Integration checks create and reset only a dedicated database ending in `_test`, using `vouch_test` by default or `TEST_DATABASE_URL`. Browser checks add synthetic records to the running development database and write ignored screenshots to `artifacts/`. `CHROMIUM_PATH` defaults to `/usr/bin/chromium`.
 
-## Evidence and runtime boundaries
+The latest application verification passed 60 unit tests, 168 PostgreSQL/HTTP assertions and all three browser suites, including automated accessibility and widths from 320 to 2560 pixels. These results validate the fixture application. They do not establish live provider authentication, successful real calls or production readiness. See the [acceptance checklist](docs/acceptance.md) and [audit report](docs/repository-audit.md).
 
-- `packages/core/src/index.ts`: strict scope/event schemas, versioned policies/scenarios, deterministic evaluation. Text from targets cannot supply backend verification.
-- `apps/api/src/fixture.ts`: deterministic caller/target fixture and normalized event ingestion; account state is written and independently read in PostgreSQL. The same vulnerable target behavior is used for both scenarios.
-- `apps/api/src/bolna.ts`: narrow attacker-runtime interface and explicit capabilities. No universal provider inheritance or invented cancellation endpoint.
-- `apps/api/src/server.ts`: authorized targets, campaign configuration snapshots, SHA-256 provenance, review audit history, reruns, regression export, and protected backend ingestion.
-- `apps/api/src/worker.ts`: PostgreSQL queue and global advisory lock; separate workers cannot execute two cases simultaneously. Run execution and evidence are transactional.
+## Project status
 
-The evaluator distinguishes transcript-only evidence, tool requests, successful tool executions, and backend state observations. A complete backend verification log is necessary to establish an absent precondition. Tool execution without verified identity is a policy violation even if durable state remains unknown. Caller assertions, mismatched accounts, later verification, and target-spoofed events do not satisfy the policy.
+**Approximately 65% of the complete brief is implemented**, based on delivered capabilities rather than test coverage. The local fixture workflow is working. The largest remaining work is the live caller and customer integration path.
 
-New configuration digests use `sha256-sorted-json-v1`: recursively sort object keys by JavaScript UTF-16 string order, preserve array order, serialize as JSON and hash the UTF-8 bytes with SHA-256. The export includes its algorithm and integrity status. This makes digests reproducible after PostgreSQL JSONB storage. Historical key-order-dependent digests remain unchanged and explicitly unverifiable; changed or unsupported new digests cannot be executed or rerun. Stored evidence is evaluated in its recorded sequence even when an imported array is reordered.
+1. Verify provider access and credentials with a configured caller and authorized target.
+2. Implement hard duration, cancellation, monetary reservation, dispatch reconciliation and stop enforcement for real calls.
+3. Connect actual transcripts, recordings, costs and customer backend evidence.
+4. Validate a bounded live control and adversarial call through review and regression export.
+5. Add authentication, tenant isolation, retention, encryption, monitoring and deployment validation before public customer use.
 
-External evidence ingestion requires an operator-provided `VOUCH_INGEST_TOKEN` bearer credential and an active live run. Synthetic evidence cannot be altered through that route. The route is not a live connector by itself. Live target evidence, recordings, and final costs remain unimplemented/unverified.
+The [project status report](docs/project-status.md) explains this estimate and remaining acceptance criteria. SIP, WebSocket/WebRTC bridges and additional runtimes are not implemented.
 
-## Data and deployment
+## Data and access
 
-PostgreSQL data is bound to ignored `.data/postgres/`, so it survives container restarts as filesystem data. Treat it as sensitive when moving beyond fictional accounts. Local Docker setup reads credentials and port from `DATABASE_URL` and checks an authenticated query; it does not reset existing containers or retained data when settings change. The sample database credentials are intentionally for local development only. Never expose this database or reuse sample credentials for production.
+Local PostgreSQL data persists in ignored `.data/postgres/`. Repeating setup retains it. Sample database credentials are for local development only. Keep the unauthenticated application and database on loopback.
 
-Cloud startup recreates processes; no live process is assumed to survive publication. Configuration draft saving is separate from publication. Restoration in a fresh task has not been verified. Before real customer use, add authentication, tenant isolation, encrypted artifact storage, retention/redaction, signed per-run evidence correlation, verified provider resource controls, and operational monitoring.
+The HTTP server exposes known page routes and approved browser assets. Raw repository documents, audit notes, dotfiles, backups and source maps are blocked. GitHub repository visibility is separate from that HTTP boundary. No public deployment or fresh-task restoration has been verified.
 
-The web server publishes only known page routes, compiled browser assets, optimized brand images, favicon and required license notices. Repository documents, audit output, backups, dotfiles and source maps return 404. Normal builds omit source maps; the local coverage build may create them on disk, but the web server still rejects their URLs. This HTTP boundary does not change access to documents committed in the Git repository; repository privacy is controlled by GitHub settings.
+## Contributing
 
-See [live integration status and sources](docs/bolna.md), [acceptance checklist](docs/acceptance.md), and the [provided product brief](docs/product-brief.md).
+Read [`AGENTS.md`](AGENTS.md), the [domain glossary](docs/domain-glossary.md) and the [original brief](docs/product-brief.md) before changing behavior. Keep provider contracts narrow, preserve evidence provenance and label synthetic data. Reproduce behavioral bugs with a meaningful failing test, then run checks appropriate to the change.
+
+For an issue or pull request, explain the user-visible problem, the change and its validation. Never include real credentials, private account data or recordings without authorization. Keep source and creator notices when adapting third-party work.
+
+## License and credits
+
+Vouch's project code and original assets are available under the [MIT license](LICENSE).
+
+Third-party assets retain their own licenses. [Phosphor icons](apps/web/public/licenses/phosphor-MIT.txt) and [OpenCode token references](apps/web/public/licenses/opencode-MIT.txt) use MIT. [Geist](apps/web/public/licenses/geist-OFL.txt) and [Geist Mono](apps/web/public/licenses/geist-mono-OFL.txt) use the SIL Open Font License. See the [design sources and credits](docs/design-redesign.md) for attribution and the scope of the references.
