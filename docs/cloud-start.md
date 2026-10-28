@@ -12,7 +12,7 @@ Use the existing `/workspace/Vouch` checkout. Every task is already isolated; do
    ```sh
    env -u DOCKER_HOST -u DOCKER_CONTEXT -u DOCKER_TLS -u DOCKER_TLS_VERIFY -u DOCKER_CERT_PATH docker --host=unix:///var/run/docker.sock info
    ```
-3. `bash scripts/db-start.sh` starts or recreates the development PostgreSQL container using retained `.data/postgres`. Run `pnpm db:migrate` if schema setup is needed. It is idempotent.
+3. Set `DATABASE_URL` through the server environment or ignored `.env`; application code has no credential fallback. If `.env` is absent, copy `.env.example` with `umask 077` before starting the default local fixture services. Preserve any existing `.env`. `bash scripts/db-start.sh` starts or recreates the development PostgreSQL container using retained `.data/postgres`. Run `pnpm db:migrate` if schema setup is needed. It is idempotent.
 4. Dependencies and `dist/web` are retained filesystem outputs. If missing or after lockfile changes, run `pnpm install --frozen-lockfile --store-dir /workspace/.pnpm-store` and `pnpm build`. Only esbuild's approved build script may run.
 5. Start the API and worker in separate managed terminal sessions: `pnpm dev:api` and `pnpm dev:worker`. For frontend development also run `pnpm dev:web`; otherwise the API serves the built interface. Check existing listeners before starting duplicates.
 6. Request the API's `/api/health` on loopback port 4000; expect `status: ok` and `database: postgresql`. A port alone does not prove readiness. Confirm `/api/overview` returns targets/campaigns and the worker logs readiness.

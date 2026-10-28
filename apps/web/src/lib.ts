@@ -25,16 +25,15 @@ export const label = (s: string) =>
     .replaceAll(".", " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 export const when = (s: string) =>
-  new Date(s).toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
+  new Date(s).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZoneName: "short",
   });
 export const dateLabel = () =>
-  new Date().toLocaleDateString("en-IN", {
-    timeZone: "Asia/Kolkata",
+  new Date().toLocaleDateString(undefined, {
     day: "numeric",
     month: "long",
     year: "numeric",

@@ -14,6 +14,8 @@ Requirements: Node 24.19 or later, pnpm 11.25.0, and an accessible Docker daemon
 
 ```sh
 pnpm install --frozen-lockfile
+test -e .env || (umask 077; cp .env.example .env)
+chmod 600 .env
 bash scripts/db-start.sh
 pnpm db:migrate
 pnpm dev
@@ -23,7 +25,7 @@ The `dev` script starts the API, worker, and Vite UI. PostgreSQL binds to loopba
 
 Cloud tasks have a restricted home directory. Use `bash scripts/cloud-install.sh` to activate pnpm with writable cloud cache paths and install/build/migrate. See [cloud startup](docs/cloud-start.md). Do not create another Git worktree for a normal cloud task.
 
-Optional local configuration is described in `.env.example`; default fixture operation needs no `.env`. Never commit credentials.
+Set `DATABASE_URL` in the server environment or an ignored `.env` file; there is no database-credential fallback in application code. Copy the sample only if you do not already have a `.env`; preserve existing settings. No provider credentials are required for fixtures. Never commit credentials.
 
 ## First campaign
 
@@ -66,8 +68,10 @@ External evidence ingestion requires an operator-provided `VOUCH_INGEST_TOKEN` b
 
 ## Data and deployment
 
-PostgreSQL data is bound to ignored `.data/postgres/`, so it survives container restarts as filesystem data. Treat it as sensitive when moving beyond fictional accounts. The local database password is intentionally a development-only value and is published in the sample configuration. Never expose this database or reuse it for production.
+PostgreSQL data is bound to ignored `.data/postgres/`, so it survives container restarts as filesystem data. Treat it as sensitive when moving beyond fictional accounts. Local Docker setup reads credentials and port from `DATABASE_URL` and checks an authenticated query; it does not reset existing containers or retained data when settings change. The sample database credentials are intentionally for local development only. Never expose this database or reuse sample credentials for production.
 
 Cloud startup recreates processes; no live process is assumed to survive publication. Configuration draft saving is separate from publication. Restoration in a fresh task has not been verified. Before real customer use, add authentication, tenant isolation, encrypted artifact storage, retention/redaction, signed per-run evidence correlation, verified provider resource controls, and operational monitoring.
+
+The web server publishes only known page routes, compiled browser assets, optimized brand images, favicon and required license notices. Repository documents, audit output, backups, dotfiles and source maps return 404. Normal builds omit source maps; the local coverage build may create them on disk, but the web server still rejects their URLs. This HTTP boundary does not change access to documents committed in the Git repository; repository privacy is controlled by GitHub settings.
 
 See [live integration status and sources](docs/bolna.md), [acceptance checklist](docs/acceptance.md), and the [provided product brief](docs/product-brief.md).

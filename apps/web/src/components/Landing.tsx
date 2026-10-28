@@ -374,18 +374,6 @@ export function Credits({ navigate }: { navigate: Navigate }) {
           </a>
           <a href="/licenses/geist-OFL.txt">License</a>
         </section>
-        <section>
-          <h2>Tessory reference</h2>
-          <p>
-            Tessory was requested as a catalog reference. Its domain remains
-            blocked by the cloud environment’s active network policy. No Tessory
-            source code or component has been copied or incorporated, and no
-            linked licenses are claimed to have been reviewed.
-          </p>
-          <a href="https://tessory.pages.dev" target="_blank" rel="noreferrer">
-            Tessory catalog <ArrowUpRightIcon size={16} />
-          </a>
-        </section>
       </main>
     </div>
   );

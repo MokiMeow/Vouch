@@ -1,9 +1,12 @@
 import "dotenv/config";
 import pg from "pg";
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString)
+  throw new Error(
+    "DATABASE_URL is required. Configure it in the server environment or ignored .env file.",
+  );
 export const db = new pg.Pool({
-  connectionString:
-    process.env.DATABASE_URL ??
-    "postgres://vouch:vouch-local-only@127.0.0.1:54329/vouch",
+  connectionString,
   max: 8,
 });
 db.on("error", () =>

@@ -15,6 +15,7 @@ import {
 import { BolnaRuntime } from "./bolna";
 import { db, transaction } from "./db";
 import { appendEvent } from "./fixture";
+import { publicSite } from "./public-site";
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "512kb" }));
@@ -35,6 +36,10 @@ app.use((req, res, next) => {
 });
 const uuid = z.uuid();
 const routeId = (id: unknown) => uuid.parse(id);
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
 app.get("/api/health", async (_req, res) => {
   await db.query("SELECT 1");
   res.json({ status: "ok", database: "postgresql", mode: "local-development" });
@@ -341,22 +346,7 @@ app.post("/api/integrations/bolna/check", async (_req, res) => {
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API route not found" });
 });
-// Reject dotfiles before the SPA catch-all; the development .env is never a web asset.
-app.use((req, res, next) => {
-  let path: string;
-  try {
-    path = decodeURIComponent(req.path);
-  } catch {
-    return res.status(400).json({ error: "Invalid request path" });
-  }
-  if (path.split("/").some((part) => part.startsWith(".")))
-    return res.status(404).json({ error: "Not found" });
-  next();
-});
-app.use(express.static("dist/web"));
-app.get("/{*path}", (_req, res) => {
-  res.sendFile("index.html", { root: "dist/web" });
-});
+app.use(publicSite);
 type ErrorResponse={status:number;message:string};
 function bodyParserFailure(error:unknown):ErrorResponse|null{
  if(!error||typeof error!=='object'||!('type' in error))return null;

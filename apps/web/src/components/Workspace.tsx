@@ -249,8 +249,8 @@ export function Workspace({
             <span className="status-dot" />
             Synthetic workspace
           </span>
-          <span className="avatar" title="Northstar · local development">
-            N
+          <span className="avatar" title="Vouch workspace">
+            V
           </span>
         </div>
       </header>
@@ -337,7 +337,7 @@ function WorkspaceFooter({ navigate }: { navigate: Navigate }) {
       <Link to="/credits" navigate={navigate}>
         Credits & assets <ArrowUpRightIcon size={14} />
       </Link>
-      <span>Northstar · local development</span>
+      <span>Synthetic workspace</span>
     </footer>
   );
 }
@@ -380,7 +380,7 @@ const headings: Record<
     title: "Your testing, in focus.",
     description:
       "Follow every conversation from caller claim to verified outcome.",
-    eyebrow: "NORTHSTAR / WORKSPACE",
+    eyebrow: "VOUCH / WORKSPACE",
   },
   Campaigns: {
     title: "Intentional tests. Clear outcomes.",
@@ -550,7 +550,7 @@ function CampaignList({
         <span>CAMPAIGN / TARGET</span>
         <span>STATUS</span>
         <span>CONVERSATIONS</span>
-        {expanded && <span>CREATED · IST</span>}
+        {expanded && <span>CREATED · LOCAL TIME</span>}
         <span />
       </div>
       {campaigns.map((c) => (

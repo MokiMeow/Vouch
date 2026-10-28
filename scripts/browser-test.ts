@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 await mkdir("artifacts/redesign", { recursive: true });
 const browser = await chromium.launch({
@@ -397,13 +397,71 @@ try {
   await page.goto(`${origin}/credits`);
   await page.getByRole("heading", { name: "Credits & assets." }).waitFor();
   assert.equal(
+    await page.getByText("Tessory reference", { exact: true }).count(),
+    0,
+  );
+  for (const path of [
+    "/licenses/phosphor-MIT.txt",
+    "/licenses/geist-OFL.txt",
+    "/licenses/geist-mono-OFL.txt",
+    "/brand/vouch-mark.webp",
+    "/brand/pearl-wave.webp",
+    "/brand/icon-192.png",
+    "/favicon.ico",
+  ])
+    assert.equal(
+      (await page.request.get(`${origin}${path}`)).status(),
+      200,
+      `${path} remains public`,
+    );
+  for (const path of [
+    "/docs/repository-audit.md",
+    "/docs/action-log.md",
+    "/artifacts/redesign/landing-desktop.png",
+    "/package.json",
+    "/apps/api/src/server.ts",
+    "/brand/vouch-mark.png",
+    "/assets/internal-source.js.map",
+  ])
+    assert.equal(
+      (await page.request.get(`${origin}${path}`)).status(),
+      404,
+      `${path} is private`,
+    );
+  if (!collectCoverage)
+    assert.equal(
+      (await readdir("dist/web", { recursive: true })).some((file) =>
+        file.endsWith(".map"),
+      ),
+      false,
+      "Production must not package source maps",
+    );
+  const overviewResponse = await page.request.get(`${origin}/api/overview`);
+  assert.equal(overviewResponse.headers()["cache-control"], "no-store");
+  // Exercise every workspace view at phone, tablet, desktop and wide widths.
+  for (const route of [
+    "/app",
+    "/app/campaigns",
+    "/app/findings",
+    "/app/targets",
+    "/app/integrations",
+  ]) {
+    await checkpoint();
+    await page.goto(`${origin}${route}`);
+    await page.locator(".page-heading h1").waitFor();
+    for (const width of [320, 390, 768, 1440, 2560]) {
+      await page.setViewportSize({ width, height: 900 });
+      await noOverflow(`${route} at ${width}px`);
+    }
+  }
+  assert.equal(
     (await page.request.get(`${origin}/.env`)).status(),
     404,
     "Dotfiles must not be served",
   );
   assert.deepEqual(errors, []);
   console.log(
-    "Browser passed: landing, hover navigation, campaign → worker → evidence → review → export → bounded rerun, target selection, bookmarkable routes, responsive 320–2560px, axe WCAG checks.",
+    "Browser passed: landing, hover navigation, campaign → worker → evidence → review → export → bounded rerun, target selection, bookmarkable routes, all workspace views responsive 320–2560px, axe WCAG checks, public/private assets and no production source maps.",
   );
 } finally {
   if (collectCoverage) {

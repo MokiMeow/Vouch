@@ -1,9 +1,17 @@
+import "dotenv/config";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import pg from "pg";
-const testUrl =
-  process.env.TEST_DATABASE_URL ??
-  "postgres://vouch:vouch-local-only@127.0.0.1:54329/vouch_test";
+const connectionString =
+  process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+if (!connectionString)
+  throw new Error(
+    "Configure TEST_DATABASE_URL or DATABASE_URL before running integration checks",
+  );
+const localUrl = new URL(connectionString);
+if (!process.env.TEST_DATABASE_URL) localUrl.pathname += "_test";
+const testUrl = localUrl.toString();
 if (!new URL(testUrl).pathname.endsWith("_test"))
   throw new Error(
     "Integration tests require a dedicated database whose name ends in _test",
@@ -87,6 +95,62 @@ const scope = () => ({
   ],
   stopOnFinding: false,
 });
+async function checkPublicBoundary() {
+  const privateFiles = [
+    "internal-notes.txt",
+    "assets/internal-notes.txt",
+    "assets/internal-source.js.map",
+  ];
+  await mkdir("dist/web/assets", { recursive: true });
+  for (const file of privateFiles)
+    await writeFile(`dist/web/${file}`, "PRIVATE TEST CANARY");
+  try {
+    for (const path of [
+      "/docs/product-brief.md",
+      "/docs/action-log.md",
+      "/artifacts/audit/crap-report.txt",
+      "/.git/config",
+      "/%2eenv",
+      "/package.json",
+      "/apps/api/src/server.ts",
+      ...privateFiles.map((file) => `/${file}`),
+    ]) {
+      const response = await fetch(`http://127.0.0.1:${port}${path}`);
+      assert.equal(response.status, 404, `${path} must not be a public route`);
+      assert.ok(!(await response.text()).includes("PRIVATE TEST CANARY"));
+      checks += 2;
+    }
+  } finally {
+    for (const file of privateFiles)
+      await rm(`dist/web/${file}`, { force: true });
+  }
+  for (const path of [
+    "/",
+    "/credits",
+    "/app",
+    "/app/findings",
+    "/licenses/phosphor-MIT.txt",
+    "/brand/vouch-mark.webp",
+    "/favicon.ico",
+  ]) {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`);
+    assert.equal(response.status, 200, `${path} must remain accessible`);
+    checks++;
+  }
+  const html = await (await fetch(`http://127.0.0.1:${port}/`)).text();
+  const script = html.match(/src="(\/assets\/[^\"]+\.js)"/);
+  assert.ok(script, "The built page must reference its compiled script");
+  assert.equal(
+    (await fetch(`http://127.0.0.1:${port}${script[1]}`)).status,
+    200,
+  );
+  assert.equal(
+    (await fetch(`http://127.0.0.1:${port}/assets/missing.js`)).status,
+    404,
+  );
+  assert.equal((await fetch(`http://127.0.0.1:${port}/%ZZ`)).status, 400);
+  checks += 4;
+}
 try {
   let ready = false;
   for (let n = 0; n < 40; n++) {
@@ -100,6 +164,7 @@ try {
     await new Promise((r) => setTimeout(r, 100));
   }
   assert.ok(ready, logs);
+  await checkPublicBoundary();
   const hidden = await fetch(`http://127.0.0.1:${port}/.env`);
   assert.equal(
     hidden.status,

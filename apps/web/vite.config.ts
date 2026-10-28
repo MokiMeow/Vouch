@@ -10,7 +10,7 @@ export default defineConfig({
     proxy: { "/api": "http://127.0.0.1:4000" },
   },
   build: {
-    sourcemap: true,
+    sourcemap: process.env.VOUCH_COVERAGE === "1",
     minify: process.env.VOUCH_COVERAGE === "1" ? false : true,
     outDir: "../../dist/web",
     emptyOutDir: true,

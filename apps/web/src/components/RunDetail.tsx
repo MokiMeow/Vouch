@@ -79,8 +79,8 @@ function RunHeading({
         <h1 tabIndex={-1}>{titleForRun(run)}</h1>
         <p>
           {run.target_name} <span className="separator">/</span>{" "}
-          {when(run.created_at)} IST <span className="separator">/</span>{" "}
-          Synthetic fixture
+          {when(run.created_at)} <span className="separator">/</span> Synthetic
+          fixture
         </p>
       </div>
       <div className="heading-actions">

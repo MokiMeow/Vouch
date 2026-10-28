@@ -18,7 +18,7 @@ function ReviewHistory({ reviews }: { reviews: NonNullable<Run["reviews"]> }) {
         <article key={r.id}>
           <strong>
             {label(r.decision)}
-            <time>{when(r.created_at)} IST</time>
+            <time>{when(r.created_at)}</time>
           </strong>
           <p>{r.note}</p>
         </article>
@@ -114,7 +114,7 @@ function ScopeDetails({ scope }: { scope: Scope | undefined }) {
     ["Maximum calls", scope.maxCalls],
     ["Max duration / call", `${scope.maxDurationSeconds}s`],
     ["Budget", `$${(scope.budgetCents / 100).toFixed(2)}`],
-    ["Window ends", `${when(scope.endsAt)} IST`],
+    ["Window ends", when(scope.endsAt)],
   ];
   return (
     <details>
