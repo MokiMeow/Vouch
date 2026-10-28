@@ -12,12 +12,18 @@
     "dev:worker": "tsx watch apps/api/src/worker.ts",
     "dev:web": "vite --config apps/web/vite.config.ts",
     "db:migrate": "tsx apps/api/src/migrate.ts",
-    "build": "tsc --noEmit && vite build --config apps/web/vite.config.ts",
+    "build": "tsc --noEmit && vite build --config apps/web/vite.config.ts && pnpm build:server",
     "test": "vitest run",
     "test:integration": "tsx apps/api/test/integration.ts",
     "test:browser": "tsx scripts/browser-test.ts",
     "test:browser:requests": "tsx scripts/browser-race-test.ts",
-    "test:browser:design": "tsx scripts/design-browser-test.ts"
+    "test:browser:design": "tsx scripts/design-browser-test.ts",
+    "build:server": "node scripts/build-server.mjs",
+    "start:api": "node dist/server/apps/api/src/server.js",
+    "start:worker": "node dist/server/apps/api/src/worker.js",
+    "db:migrate:production": "node dist/server/apps/api/src/migrate.js",
+    "maintenance": "node dist/server/scripts/maintenance.js",
+    "setup:secrets": "node scripts/configure-secrets.mjs"
   },
   "dependencies": {
     "@fontsource/geist": "5.3.0",

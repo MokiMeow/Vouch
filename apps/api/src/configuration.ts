@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { canonicalJson } from "../../../packages/core/src/serialization";
+export { canonicalJson } from "../../../packages/core/src/serialization";
 import { policy } from "../../../packages/core/src/policy";
 
 export const CONFIG_HASH_ALGORITHM = "sha256-sorted-json-v1";
@@ -13,21 +15,6 @@ export const currentPolicySchema = z.object({
   forbiddenOutcome: z.literal(policy.forbiddenOutcome),
 });
 
-// Arrays keep their order. Object keys use JavaScript's deterministic UTF-16
-// ordering, at every depth. JSONB key ordering cannot change the digest.
-export function canonicalJson(value: unknown): string {
-  const json = JSON.stringify(value, (_key, item: unknown) => {
-    if (item && typeof item === "object" && !Array.isArray(item))
-      return Object.fromEntries(
-        Object.keys(item)
-          .sort()
-          .map((key) => [key, Reflect.get(item, key)]),
-      );
-    return item;
-  });
-  if (json === undefined) throw new Error("A JSON configuration is required");
-  return json;
-}
 export function configurationHash(value: unknown) {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }

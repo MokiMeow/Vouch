@@ -25,6 +25,7 @@ import { api, dateLabel, label, titleForRun, when } from "../lib";
 import { useEvidence, useOverview } from "../hooks/data";
 import type {
   Action,
+  AuthSession,
   Campaign,
   Navigate,
   Overview,
@@ -42,6 +43,7 @@ import {
   Notice,
 } from "./Primitives";
 import { RunDetail } from "./RunDetail";
+import { SessionControls } from "./Auth";
 import "../workspace-v2.css";
 const navigation = [
   { name: "Overview", path: "/app", icon: HouseLineIcon },
@@ -184,14 +186,20 @@ type ModalSettings = { type: "campaign" | "target"; targetId?: string } | null;
 export function Workspace({
   path,
   navigate,
+  session,
+  onSessionChange,
 }: {
   path: string;
   navigate: Navigate;
+  session: AuthSession;
+  onSessionChange: (session: AuthSession) => void;
 }) {
   const [error, setError] = useState(""),
     [modal, setModal] = useState<ModalSettings>(null);
   const { notice, setNotice } = useTimedNotice();
-  const { data, refresh } = useOverview(setError);
+  const [historyOffset, setHistoryOffset] = useState(0);
+  const { data, refresh } = useOverview(setError, historyOffset);
+  useEffect(() => setHistoryOffset(0), [path]);
   const evidence = useEvidence(path);
   const page = pageFor(path);
   useEffect(() => {
@@ -219,13 +227,20 @@ export function Workspace({
         <WorkspaceNav
           path={path}
           navigate={navigate}
-          count={pendingFindings(data?.runs ?? []).length}
+          count={
+            data?.summary?.pendingFindings ??
+            pendingFindings(data?.runs ?? []).length
+          }
         />
         <div className="workspace-identity">
-          <span className="workspace-mode">
-            <span className="status-dot" />
-            Local sandbox
-          </span>
+          <SessionControls
+            session={session}
+            onChange={(next) => {
+              if (next.workspace?.id !== session.workspace?.id)
+                navigate("/app");
+              onSessionChange(next);
+            }}
+          />
           <a
             className="avatar workspace-docs-shortcut"
             href="/docs"
@@ -256,6 +271,12 @@ export function Workspace({
           />
         ) : (
           <WorkspaceLoading refresh={refresh} />
+        )}
+        {data?.pagination && ["Campaigns", "Findings"].includes(page) && (
+          <HistoryPagination
+            pagination={data.pagination}
+            onPage={setHistoryOffset}
+          />
         )}
         <WorkspaceFooter navigate={navigate} />
       </main>
@@ -306,6 +327,7 @@ function WorkspaceDialog({
         type={settings.type}
         targets={data?.targets ?? []}
         targetId={settings.targetId}
+        live={data?.live}
         onSuccess={onSuccess}
       />
     </Modal>
@@ -316,10 +338,10 @@ function WorkspaceFooter({ navigate }: { navigate: Navigate }) {
     <footer className="workspace-footer">
       <span>
         <ShieldCheckIcon size={16} />
-        Local runs. Real evidence.
+        Scoped runs. Traceable evidence.
       </span>
       <CreditsLink navigate={navigate} />
-      <span>v0.1 · Synthetic workspace</span>
+      <span>v0.1 · Evidence workspace</span>
     </footer>
   );
 }
@@ -483,7 +505,9 @@ function WorkspacePage({
         <span>{dateLabel()}</span>
         <span>
           <span className="status-dot" />
-          Synthetic mode · no live calls
+          {data.live.enabled
+            ? "Scoped fixture and live campaigns"
+            : "Synthetic mode · live prerequisites pending"}
         </span>
       </div>
       <PageHeading page={page} setModal={setModal} />
@@ -684,23 +708,27 @@ function OverviewMetrics({ data }: { data: Overview }) {
     <div className="metric-strip" aria-label="Workspace activity">
       <Metric
         title="Campaigns"
-        value={data.campaigns.length}
+        value={data.summary?.campaigns ?? data.campaigns.length}
         note="In this workspace"
       />
       <Metric
         title="Conversations tested"
-        value={data.runs.filter((run) => run.status === "completed").length}
+        value={
+          data.summary?.runs ??
+          data.runs.filter((run) => run.status === "completed").length
+        }
         note="Completed runs"
       />
       <Metric
         title="Candidate findings"
-        value={findings.length}
-        note={`${pendingFindings(data.runs).length} awaiting review`}
+        value={data.summary?.candidates ?? findings.length}
+        note={`${data.summary?.pendingFindings ?? pendingFindings(data.runs).length} awaiting review`}
         warning
       />
       <Metric
         title="Backend verified"
         value={
+          data.summary?.backendVerified ??
           data.runs.filter((run) => run.verdict?.tier === "backend_verified")
             .length
         }
@@ -713,10 +741,12 @@ function OverviewReviews({
   runs,
   openRun,
   navigate,
+  totalPending,
 }: {
   runs: Run[];
   openRun: (id: string) => void;
   navigate: Navigate;
+  totalPending?: number;
 }) {
   const pending = pendingFindings(runs);
   return (
@@ -725,7 +755,8 @@ function OverviewReviews({
         <div>
           <span className="eyebrow">HUMAN CHECKPOINT</span>
           <h2>
-            Needs your review <span className="count">{pending.length}</span>
+            Needs your review{" "}
+            <span className="count">{totalPending ?? pending.length}</span>
           </h2>
         </div>
         <ArrowLink action={() => navigate("/app/findings")}>
@@ -742,8 +773,16 @@ function OverviewReviews({
         <div className="quiet-empty">
           <ShieldCheckIcon size={26} weight="light" />
           <div>
-            <strong>All clear for now.</strong>
-            <p>No findings awaiting review.</p>
+            <strong>
+              {totalPending
+                ? "Earlier findings need review."
+                : "All clear for now."}
+            </strong>
+            <p>
+              {totalPending
+                ? "Browse campaign history to review findings from earlier campaigns."
+                : "No findings awaiting review."}
+            </p>
           </div>
         </div>
       )}
@@ -794,7 +833,7 @@ function OverviewView({
               action(
                 `/campaigns/${id}/stop`,
                 {},
-                "Campaign stopped. Queued calls cancelled.",
+                "Stop requested. Queued calls cancelled and active calls marked for cancellation.",
               )
             }
           />
@@ -803,11 +842,16 @@ function OverviewView({
           runs={data.runs}
           openRun={openRun}
           navigate={navigate}
+          totalPending={data.summary?.pendingFindings}
         />
       </div>
       <div className="fixture-footnote">
         <TerminalIcon size={16} />
-        <p>Synthetic runs only. No live calls or provider charges.</p>
+        <p>
+          {data.live.enabled
+            ? "Live campaigns consume your authorized provider budget. Fixtures remain free."
+            : "Fixture campaigns are synthetic. Live calls require configured resource controls."}
+        </p>
       </div>
     </>
   );
@@ -824,7 +868,9 @@ function CampaignsView({
       <div className="section-heading">
         <h2>
           Campaign history{" "}
-          <span className="count">{data.campaigns.length}</span>
+          <span className="count">
+            {data.pagination?.totalCampaigns ?? data.campaigns.length}
+          </span>
         </h2>
         <Badge>Concurrency · 1</Badge>
       </div>
@@ -837,7 +883,7 @@ function CampaignsView({
           action(
             `/campaigns/${id}/stop`,
             {},
-            "Campaign stopped. Queued calls cancelled.",
+            "Stop requested. Queued calls cancelled and active calls marked for cancellation.",
           )
         }
         expanded
@@ -865,7 +911,7 @@ function FindingsView({
           <MagnifyingGlassIcon size={19} />
           <span className="sr-only">Search findings</span>
           <input
-            placeholder="Search conversations, campaigns…"
+            placeholder="Search this history page…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -886,7 +932,9 @@ function FindingsView({
             <option value="unknown">Unknown evidence</option>
           </select>
         </div>
-        <span className="result-count">{visibleRuns.length} conversations</span>
+        <span className="result-count">
+          {visibleRuns.length} conversations on this page
+        </span>
       </div>
       {visibleRuns.length ? (
         visibleRuns.map((r) => (
@@ -935,7 +983,7 @@ function TargetsView({
                 <Badge tone={t.transport === "fixture" ? "violet" : "amber"}>
                   {t.transport === "fixture"
                     ? "Synthetic target"
-                    : "PSTN · live unverified"}
+                    : "Approved PSTN target"}
                 </Badge>
               </div>
               <p>
@@ -954,11 +1002,13 @@ function TargetsView({
             </div>
             <button
               className="button secondary"
-              disabled={t.transport !== "fixture"}
+              disabled={t.transport !== "fixture" && !data.live.enabled}
               title={
                 t.transport === "fixture"
                   ? "Start a campaign for this target"
-                  : "Live dispatch is disabled"
+                  : data.live.enabled
+                    ? "Start an authorized live campaign"
+                    : data.live.reason
               }
               onClick={() => setModal({ type: "campaign", targetId: t.id })}
             >
@@ -997,9 +1047,13 @@ function IntegrationsView({
         <div className="integration-content">
           <div className="integration-title">
             <h2>Bolna</h2>
-            <Badge tone="amber">Live unverified</Badge>
+            <Badge tone={data.live.enabled ? "violet" : "amber"}>
+              {data.live.enabled ? "Configuration ready" : "Setup required"}
+            </Badge>
           </div>
-          <p>Hosted voice runtime. Live dispatch is not yet available.</p>
+          <p>
+            Hosted caller runtime with bounded dispatch and recorded evidence.
+          </p>
           <dl>
             <div>
               <dt>Credentials</dt>
@@ -1017,12 +1071,19 @@ function IntegrationsView({
             </div>
             <div>
               <dt>Live dispatch</dt>
-              <dd>Disabled</dd>
+              <dd>
+                {data.live.enabled
+                  ? "Configuration ready"
+                  : "Blocked by prerequisites"}
+              </dd>
             </div>
           </dl>
           <div className="connection-boundary">
             <WarningCircleIcon size={19} />
-            <p>{data.live.reason} No successful live call has been verified.</p>
+            <p>
+              {data.live.reason} Provider configuration readiness is separate
+              from a verified live call.
+            </p>
           </div>
           <button
             className="button secondary"
@@ -1030,7 +1091,7 @@ function IntegrationsView({
               action(
                 "/integrations/bolna/check",
                 {},
-                "Bolna read-only connection verified. Live dispatch remains disabled.",
+                "Bolna read-only connection verified. Campaign launch still checks every resource control.",
               )
             }
           >
@@ -1081,8 +1142,8 @@ function IntegrationsView({
             approved targets.
           </p>
           <p>
-            Local access only until authentication and tenant isolation are
-            added.
+            Workspace access and provider setup are managed independently. Never
+            put provider credentials into browser settings.
           </p>
         </div>
       </div>
@@ -1143,7 +1204,7 @@ function CampaignRow({
           </button>
           <p>
             {c.target_name}
-            <span>· Synthetic</span>
+            <span>{c.mode === "live" ? "· Live" : "· Synthetic"}</span>
           </p>
           {violations > 0 && (
             <span className="campaign-findings">
@@ -1194,3 +1255,38 @@ type CommonView = {
   campaign: () => void;
   action: Action;
 };
+
+function HistoryPagination({
+  pagination,
+  onPage,
+}: {
+  pagination: NonNullable<Overview["pagination"]>;
+  onPage: (offset: number) => void;
+}) {
+  const { offset, limit, totalCampaigns, hasMore } = pagination;
+  return (
+    <nav className="history-pagination" aria-label="Campaign history pages">
+      <span>
+        {totalCampaigns
+          ? `${offset + 1}–${Math.min(offset + limit, totalCampaigns)} of ${totalCampaigns} campaigns`
+          : "No campaigns yet"}
+      </span>
+      <div>
+        <button
+          className="button secondary"
+          disabled={offset === 0}
+          onClick={() => onPage(Math.max(0, offset - limit))}
+        >
+          Previous
+        </button>
+        <button
+          className="button secondary"
+          disabled={!hasMore}
+          onClick={() => onPage(offset + limit)}
+        >
+          Next
+        </button>
+      </div>
+    </nav>
+  );
+}

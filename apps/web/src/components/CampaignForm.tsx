@@ -7,7 +7,7 @@ import {
 } from "@phosphor-icons/react";
 import { useState, type FormEvent } from "react";
 import { api } from "../lib";
-import type { Target } from "../types";
+import type { Overview, Target } from "../types";
 type FormType = "campaign" | "target";
 const copy = {
   campaign: {
@@ -53,6 +53,7 @@ async function saveCampaign(form: FormData) {
   return api("/campaigns", {
     name: form.get("name"),
     targetId,
+    mode: form.get("mode") ?? "fixture",
     scope: {
       startsAt: new Date(Date.now() - 1000).toISOString(),
       endsAt: new Date(
@@ -77,16 +78,24 @@ export function SetupForm({
   type,
   targets,
   targetId,
+  live,
   onSuccess,
 }: {
   type: FormType;
   targets: Target[];
   targetId?: string;
+  live?: Overview["live"];
   onSuccess: (message: string) => void;
 }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [transport, setTransport] = useState("fixture");
+  const [mode, setMode] = useState<"fixture" | "live">(
+    targets.find((target) => target.id === targetId)?.transport === "pstn"
+      ? "live"
+      : "fixture",
+  );
+  const liveCampaign = type === "campaign" && mode === "live";
   const content = copy[type];
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -100,7 +109,11 @@ export function SetupForm({
     };
     try {
       await save[type](form);
-      onSuccess(content.success);
+      onSuccess(
+        liveCampaign
+          ? "Live campaign queued. The worker will recheck authorization and provider controls before dispatch."
+          : content.success,
+      );
     } catch (error) {
       setError((error as Error).message);
     } finally {
@@ -116,6 +129,32 @@ export function SetupForm({
         </div>
       )}
       <p className="form-intro">{content.intro}</p>
+      {type === "campaign" && (
+        <label>
+          Test mode
+          <select
+            value={mode}
+            name="mode"
+            onChange={(event) =>
+              setMode(event.target.value as "fixture" | "live")
+            }
+          >
+            <option value="fixture">
+              Synthetic fixture · no provider cost
+            </option>
+            <option value="live">
+              Live Bolna call · approved targets only
+            </option>
+          </select>
+        </label>
+      )}
+      {liveCampaign && !live?.enabled && (
+        <p className="inline-error" role="status">
+          <WarningCircleIcon size={18} />
+          {live?.reason ??
+            "Live prerequisites must be configured before dispatch."}
+        </p>
+      )}
       <label>
         {content.label}
         <input
@@ -131,13 +170,34 @@ export function SetupForm({
       {type === "target" ? (
         <TargetFields transport={transport} setTransport={setTransport} />
       ) : (
-        <CampaignFields targets={targets} targetId={targetId} />
+        <CampaignFields
+          key={mode}
+          targets={targets}
+          targetId={targetId}
+          mode={mode}
+        />
       )}
-      <button className="button primary submit-button" disabled={busy}>
-        {busy ? "Saving…" : content.submit}
+      <button
+        className="button primary submit-button"
+        disabled={
+          busy ||
+          (liveCampaign &&
+            (!live?.enabled ||
+              !targets.some((target) => target.transport === "pstn")))
+        }
+      >
+        {busy
+          ? "Saving…"
+          : liveCampaign
+            ? "Authorize and launch live campaign"
+            : content.submit}
         <ArrowUpRightIcon size={19} />
       </button>
-      <p className="form-footnote">{content.footnote}</p>
+      <p className="form-footnote">
+        {liveCampaign
+          ? "This may place real calls to your approved test number and consume the authorized budget."
+          : content.footnote}
+      </p>
     </form>
   );
 }
@@ -158,14 +218,14 @@ function TargetFields({
           onChange={(e) => setTransport(e.target.value)}
         >
           <option value="fixture">Synthetic support agent</option>
-          <option value="pstn">Approved phone number · live unverified</option>
+          <option value="pstn">Approved phone number</option>
         </select>
       </label>
       {transport === "pstn" && (
         <>
           <p className="form-help">
-            Registration only. Live dispatch is disabled; the number must match
-            the operator’s allowlist.
+            The number must match the operator’s allowlist. Registration does
+            not launch a call.
           </p>
           <label>
             Approved E.164 phone number
@@ -200,35 +260,37 @@ function TargetFields({
 function CampaignFields({
   targets,
   targetId,
+  mode,
 }: {
   targets: Target[];
   targetId?: string;
+  mode: "fixture" | "live";
 }) {
+  const eligible = targets.filter(
+    (target) => target.transport === (mode === "live" ? "pstn" : "fixture"),
+  );
+  const selected =
+    eligible.find((target) => target.id === targetId)?.id ??
+    eligible[0]?.id ??
+    (mode === "fixture" ? "new-fixture" : "");
   return (
     <>
       <label>
         Approved target
-        <select
-          name="target"
-          defaultValue={
-            targetId ??
-            targets.find((t) => t.transport === "fixture")?.id ??
-            "new-fixture"
-          }
-        >
-          {targets.map((t) => (
-            <option
-              key={t.id}
-              value={t.id}
-              disabled={t.transport !== "fixture"}
-            >
-              {t.name}
-              {t.transport !== "fixture" ? " · live unavailable" : ""}
+        <select name="target" defaultValue={selected} required>
+          {mode === "live" && eligible.length === 0 && (
+            <option value="">Register an approved phone target first</option>
+          )}
+          {eligible.map((target) => (
+            <option key={target.id} value={target.id}>
+              {target.name}
             </option>
           ))}
-          <option value="new-fixture">
-            Create a local synthetic support target
-          </option>
+          {mode === "fixture" && (
+            <option value="new-fixture">
+              Create a local synthetic support target
+            </option>
+          )}
         </select>
       </label>
       <div className="form-grid">
@@ -274,10 +336,14 @@ function CampaignFields({
             min={0}
             max={100}
             step="0.01"
-            defaultValue={0}
+            defaultValue={mode === "fixture" ? 0 : 10}
             required
           />
-          <small>Fixture runs cost $0.</small>
+          <small>
+            {mode === "fixture"
+              ? "Fixture runs cost $0."
+              : "The worker reserves worst-case cost before each call."}
+          </small>
         </label>
       </div>
       <div className="scope-terms">

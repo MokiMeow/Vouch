@@ -11,8 +11,9 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { CapturedPolicy } from "../../../../packages/core/src/schemas";
-import { label } from "../lib";
-import type { EvidenceEvent, Run, Verdict } from "../types";
+import { api, ApiError, label } from "../lib";
+import { useWorkspaceSession } from "./Auth";
+import type { EvidenceEvent, RecordingArtifact, Run, Verdict } from "../types";
 import { Badge } from "./Primitives";
 function useSpeech(transcript: EvidenceEvent[]) {
   const [playing, setPlaying] = useState(false),
@@ -181,7 +182,13 @@ function Timeline({ events }: { events: EvidenceEvent[] }) {
   );
 }
 const tabs = ["conversation", "timeline", "raw events"];
-export function ConversationSection({ run }: { run: Run }) {
+export function ConversationSection({
+  run,
+  onUpdate,
+}: {
+  run: Run;
+  onUpdate: () => void;
+}) {
   const [selected, setSelected] = useState(0);
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const events = run.events ?? [],
@@ -215,7 +222,11 @@ export function ConversationSection({ run }: { run: Run }) {
         </div>
         <Badge>{run.synthetic ? "Synthetic" : "Provider evidence"}</Badge>
       </div>
-      <AudioPlayer transcript={transcript} />
+      {run.synthetic ? (
+        <AudioPlayer transcript={transcript} />
+      ) : (
+        <RecordedAudio run={run} onUpdate={onUpdate} />
+      )}
       <div className="tabs" role="tablist" aria-label="Evidence views">
         {tabs.map((tab, i) => (
           <button
@@ -379,5 +390,180 @@ export function PolicySection({
         verification.
       </p>
     </section>
+  );
+}
+
+function RecordedAudio({ run, onUpdate }: { run: Run; onUpdate: () => void }) {
+  const recordings = (run.artifacts ?? []).filter(
+    (artifact) =>
+      artifact.kind === "recording" &&
+      artifact.contentType.startsWith("audio/"),
+  );
+  if (!recordings.length)
+    return (
+      <div>
+        <p className="empty-evidence">
+          {recordingRedacted(run)
+            ? "The recording was permanently discarded. Future recording recovery is disabled."
+            : "No call recording is available. Provider audio is never replaced with synthetic speech."}
+        </p>
+        <RetryRecording run={run} onUpdate={onUpdate} />
+      </div>
+    );
+  return (
+    <div>
+      {recordings.map((recording) => (
+        <RecordingPlayback
+          runId={run.id}
+          recording={recording}
+          key={recording.id}
+        />
+      ))}
+    </div>
+  );
+}
+function RecordingPlayback({
+  runId,
+  recording,
+}: {
+  runId: string;
+  recording: RecordingArtifact;
+}) {
+  const [unavailable, setUnavailable] = useState(false);
+  return (
+    <div className="recording-player">
+      <strong>Provider call recording</strong>
+      <audio
+        controls
+        preload="none"
+        aria-label="Provider call recording"
+        onError={() => setUnavailable(true)}
+        src={`/api/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(recording.id)}`}
+      />
+      {unavailable && (
+        <p role="status">
+          Recording unavailable or access expired. Refresh your workspace to try
+          again.
+        </p>
+      )}
+      <span className="muted small">
+        Encrypted at rest · expires{" "}
+        {new Date(recording.expiresAt).toLocaleString()}
+      </span>
+    </div>
+  );
+}
+
+function recordingRedacted(run: Run) {
+  return (
+    run.recording?.redacted ||
+    (run.events ?? []).some(
+      (event) =>
+        event.kind === "provider.event" &&
+        event.data.operation === "recording_redacted",
+    )
+  );
+}
+function recoveredMessage(result: Record<string, unknown>) {
+  const updates = [];
+  if (result.transcript === "captured") updates.push("Transcript recovered.");
+  if (result.recording === "captured") updates.push("Recording recovered.");
+  return updates.join(" ");
+}
+function RetryRecording({ run, onUpdate }: { run: Run; onUpdate: () => void }) {
+  const session = useWorkspaceSession();
+  const [busy, setBusy] = useState(false),
+    [message, setMessage] = useState(""),
+    [discarded, setDiscarded] = useState(false);
+  const redacted = recordingRedacted(run) || discarded;
+  const transcriptKnown =
+    run.recording?.transcriptRedacted ||
+    (run.events ?? []).some((event) => event.kind === "transcript");
+  if (
+    !["completed", "failed", "cancelled"].includes(run.status) ||
+    (session?.mode !== "local" && session?.workspace?.role !== "owner")
+  )
+    return null;
+  async function finish() {
+    try {
+      await onUpdate();
+    } catch {
+      setMessage(
+        (previous) =>
+          previous ||
+          "Evidence refresh failed. Refresh the workspace before trying again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function retry() {
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await api(`/runs/${run.id}/artifacts/retry`, {});
+      setMessage(
+        recoveredMessage(result) ||
+          "Provider artifacts are available or covered by your privacy settings.",
+      );
+    } catch (error) {
+      const partial =
+        error instanceof ApiError && error.details
+          ? recoveredMessage(error.details)
+          : "";
+      setMessage([partial, (error as Error).message].filter(Boolean).join(" "));
+    } finally {
+      await finish();
+    }
+  }
+  async function discard() {
+    if (
+      !window.confirm(
+        "Permanently discard this recording and disable future recovery? This cannot be undone.",
+      )
+    )
+      return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await api(`/runs/${run.id}/artifacts/redact`, {});
+      setDiscarded(true);
+      setMessage("Recording discarded. Future recording recovery is disabled.");
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      await finish();
+    }
+  }
+  return (
+    <div>
+      {(!redacted || !transcriptKnown) && (
+        <button
+          className="button secondary"
+          disabled={busy}
+          onClick={() => void retry()}
+        >
+          {busy
+            ? "Retrieving…"
+            : redacted
+              ? "Retry transcript"
+              : "Retry recording"}
+        </button>
+      )}
+      {!redacted && (
+        <button
+          className="text-button"
+          disabled={busy}
+          onClick={() => void discard()}
+        >
+          Discard recording
+        </button>
+      )}
+      <p className="muted small">
+        Recovery reads existing provider artifacts without placing another call.
+        Privacy redactions remain permanent.
+      </p>
+      {message && <p role="status">{message}</p>}
+    </div>
   );
 }

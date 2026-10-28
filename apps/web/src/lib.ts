@@ -1,12 +1,34 @@
-export async function api(path: string, body?: unknown, signal?: AbortSignal) {
+let csrfToken: string | null = null;
+export function setApiSessionToken(token: string | null) {
+  csrfToken = token;
+}
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly details?: Record<string, unknown>,
+  ) {
+    super(message);
+  }
+}
+export async function api(
+  path: string,
+  body?: unknown,
+  signal?: AbortSignal,
+  method: "POST" | "DELETE" = "POST",
+) {
   const response = await fetch(`/api${path}`, {
     ...(body === undefined
       ? {}
       : {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            ...(csrfToken ? { "X-Vouch-CSRF": csrfToken } : {}),
+          },
           body: JSON.stringify(body),
         }),
+    credentials: "same-origin",
     signal,
   });
   const type = response.headers.get("content-type") ?? "";
@@ -15,8 +37,15 @@ export async function api(path: string, body?: unknown, signal?: AbortSignal) {
       "The service returned an unexpected response. Please try again.",
     );
   const result = await response.json();
-  if (!response.ok)
-    throw new Error(result.error ?? "The request could not be completed.");
+  if (!response.ok) {
+    if (response.status === 401 && !path.startsWith("/auth/login"))
+      window.dispatchEvent(new Event("vouch-session-expired"));
+    throw new ApiError(
+      result.error ?? "The request could not be completed.",
+      response.status,
+      result && typeof result === "object" ? result : undefined,
+    );
+  }
   return result;
 }
 export const label = (s: string) =>

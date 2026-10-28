@@ -52,7 +52,7 @@ const guides: Guide[] = [
           },
           {
             kind: "text",
-            text: "The available local workflow tests one contact-change policy against an instrumented synthetic support agent. It includes an adversarial false-authority scenario and a legitimate verified control. Both use the same target behavior and fictional account.",
+            text: "Vouch includes a no-credentials local fixture and a coded live PSTN path using a Twilio-backed Bolna caller. Both apply the same contact-change policy with a verified control and false-authority scenario. Session authentication, workspace isolation, signed backend evidence and encrypted recording storage are implemented. Provider account setup and voice acceptance testing remain operator work.",
           },
         ],
       },
@@ -83,24 +83,41 @@ const guides: Guide[] = [
             rows: [
               ["Synthetic campaigns", "Available with no provider key"],
               [
+                "Live PSTN campaigns",
+                "Implemented behind explicit account, scope and resource-control gates",
+              ],
+              [
                 "Backend policy evaluation",
-                "Deterministic assertions against recorded events",
+                "Deterministic assertions against trusted ordered events",
               ],
               [
                 "Human review and export",
-                "Available with preserved configuration and review history",
+                "Preserved configuration, terminal findings and append-only review history",
               ],
               [
-                "Bolna connection check",
-                "Read-only check with configured credentials and network access",
+                "Workspace access",
+                "Password sessions, workspace membership, role checks and database row-level isolation",
               ],
-              ["Live calls and call recordings", "Not implemented or verified"],
+              [
+                "Recordings and signed connectors",
+                "Provider audio encrypted at rest and separate per-run backend and provider credentials",
+              ],
+              [
+                "Deployment and retention",
+                "Nonroot containers, separate workers, maintenance and backup/restore scripts",
+              ],
             ],
           },
           {
             kind: "note",
             title: "Know what you are testing",
             text: "Fixture runs use fictional data and do not place calls or incur provider charges. Browser speech replay is a synthetic reading of the transcript. It is not a recording of a call.",
+          },
+          {
+            kind: "note",
+            title: "Implementation and validation are different",
+            text: "The code paths described here are implemented. No new voice calls, provider acceptance tests or deployment exercises were performed for this delivery. A configuration-ready status is not a claim that your account or a live call has been verified.",
+            warning: true,
           },
         ],
       },
@@ -122,7 +139,7 @@ const guides: Guide[] = [
     group: "Start here",
     description:
       "Run the complete synthetic workflow locally. No Bolna account or provider key is required.",
-    time: "5 min setup",
+    time: "8 min setup",
     sections: [
       {
         id: "requirements",
@@ -176,9 +193,19 @@ const guides: Guide[] = [
           },
           {
             kind: "note",
-            title: "Local development only",
-            text: "The API is a single-workspace development server without user authentication. Keep it on loopback. The database helper preserves retained data and does not reset credentials on an existing container.",
+            title: "Choose the access mode",
+            text: "Loopback development defaults to a password-free local fixture workspace. Set VOUCH_AUTH_MODE to session to require sign-in and workspace membership. Production rejects local mode and requires an HTTPS PUBLIC_ORIGIN. The database helper preserves retained data and does not reset existing database credentials.",
             warning: true,
+          },
+          {
+            kind: "code",
+            title: "Generate missing private storage and connector keys",
+            language: "shell",
+            text: "pnpm setup:secrets",
+          },
+          {
+            kind: "text",
+            text: "The key helper fills only missing or blank signing and recording keys in the ignored `.env`. It preserves existing keys and does not print them. Fixtures still require no provider account. Never rotate an artifact key without migrating existing recordings.",
           },
         ],
       },
@@ -209,6 +236,44 @@ const guides: Guide[] = [
         ],
       },
       {
+        id: "workspace-authentication",
+        title: "Workspace authentication",
+        blocks: [
+          {
+            kind: "table",
+            columns: ["Server setting", "Required behavior"],
+            rows: [
+              ["VOUCH_AUTH_MODE", "Use session for authenticated workspaces"],
+              [
+                "PUBLIC_ORIGIN",
+                "Exact browser-facing origin with no trailing slash or path",
+              ],
+              [
+                "VOUCH_BOOTSTRAP_EMAIL",
+                "Initial owner email for an empty user database",
+              ],
+              [
+                "VOUCH_BOOTSTRAP_PASSWORD",
+                "Initial owner password with at least 14 characters",
+              ],
+              ["VOUCH_BOOTSTRAP_WORKSPACE", "Optional initial workspace name"],
+              [
+                "VOUCH_SESSION_HOURS",
+                "Absolute session lifetime from 1 to 168 hours, default 12",
+              ],
+            ],
+          },
+          {
+            kind: "text",
+            text: "Apply private server settings, run migrations and restart the API before signing in. Bootstrap creates the first owner once and does not overwrite existing users. Use workspace settings to add members, create another workspace or rotate a password. Password rotation signs out all sessions for that user.",
+          },
+          {
+            kind: "text",
+            text: "Keep local mode on loopback with fictional data. Session mode carries the authorized workspace through every query and enforces PostgreSQL row-level policies. Production cookies are always Secure and require HTTPS. Remove the bootstrap password from deployment settings after the owner has signed in and rotated it.",
+          },
+        ],
+      },
+      {
         id: "verify-your-setup",
         title: "Verify your setup",
         blocks: [
@@ -226,7 +291,77 @@ const guides: Guide[] = [
             kind: "code",
             title: "Run browser checks",
             language: "shell",
-            text: "pnpm test:browser\npnpm test:browser:requests",
+            text: "pnpm test:browser\npnpm test:browser:requests\npnpm test:browser:design",
+          },
+          {
+            kind: "note",
+            title: "Acceptance remains with your team",
+            text: "The commands above are provided for your acceptance process. This delivery did not run the test suites, voice calls, container deployment or recovery exercises requested for your team to perform.",
+            warning: false,
+          },
+        ],
+      },
+      {
+        id: "production-deployment",
+        title: "Production deployment",
+        blocks: [
+          {
+            kind: "text",
+            text: "The supplied Docker Compose setup separates the private database, migration job, API, worker and maintenance runner. The application runs as a nonroot user with a read-only root filesystem. Publish the loopback API through an operator-managed HTTPS reverse proxy.",
+          },
+          {
+            kind: "code",
+            title: "Create private production configuration",
+            language: "shell",
+            text: "umask 077\ntest -e .env.production || touch .env.production\nchmod 600 .env.production\nmkdir -p .data/secrets\nchmod 700 .data/secrets\npnpm setup:secrets --file .env.production",
+          },
+          {
+            kind: "table",
+            columns: ["Setting or file", "Required value"],
+            rows: [
+              [
+                "POSTGRES_USER and POSTGRES_DB",
+                "Operator-selected database owner and database name",
+              ],
+              [
+                "DATABASE_URL",
+                "Selected PostgreSQL credentials with service host database and port 5432",
+              ],
+              [
+                ".data/secrets/postgres_password",
+                "Selected database password only, kept at mode 0600 and matching DATABASE_URL",
+              ],
+              ["PUBLIC_ORIGIN", "The exact external HTTPS origin"],
+              ["VOUCH_AUTH_MODE", "session"],
+              [
+                "VOUCH_BOOTSTRAP_EMAIL and VOUCH_BOOTSTRAP_PASSWORD",
+                "Initial owner credentials for an empty user database",
+              ],
+              [
+                "VOUCH_ARTIFACT_KEY",
+                "Private recording key retained across restarts and backups",
+              ],
+              [
+                "VOUCH_RECORDING_HOSTS",
+                "Exact approved provider audio hostnames",
+              ],
+            ],
+          },
+          {
+            kind: "text",
+            text: "Fill the remaining required production values with a private editor or secret manager before building. Do not reuse development credentials. Never print resolved Compose configuration into shared logs. The live integration guide lists the additional caller and billing controls.",
+          },
+          {
+            kind: "code",
+            title: "Build and start the production services",
+            language: "shell",
+            text: "docker compose --env-file .env.production build\ndocker compose --env-file .env.production up -d database migrate api worker\ndocker compose --env-file .env.production ps",
+          },
+          {
+            kind: "note",
+            title: "Prepare the deployment before customer traffic",
+            text: "A successful build does not validate a deployment. Configure HTTPS, shared upstream rate limits, monitored storage and recovery procedures. Protect encryption keys separately from database and artifact backups.",
+            warning: true,
           },
         ],
       },
@@ -246,7 +381,7 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "text",
-            text: "In the workspace, select New campaign. Choose an existing synthetic target or Create a local synthetic support target. Only register systems you own or have explicit authorization to test. Live phone registration does not enable calling.",
+            text: "In the workspace, select New campaign and choose Synthetic fixture or Live Bolna call. Fixtures can create a local fictional support target. Live mode requires a previously registered approved phone target and a configuration-ready integration. Registration checks the exact operator allowlist and authorization reference without placing a call.",
           },
         ],
       },
@@ -264,20 +399,23 @@ const guides: Guide[] = [
               ],
               [
                 "Concurrency",
-                "1 active fixture globally, including across worker processes",
+                "1 active case globally, including across worker processes and unresolved live dispatches",
               ],
               [
                 "Duration",
-                "40 to 300 seconds per permitted call. Fixture events complete in 32 synthetic seconds.",
+                "40 to 300 seconds per permitted call. Live callers receive provider and carrier controls; fixtures use a logical 32-second event trace.",
               ],
-              ["Budget", "0 to 100 USD. Fixture cost is exactly 0."],
+              [
+                "Budget",
+                "0 to 100 USD. Fixtures cost 0. Live calls reserve a configured all-component worst-case cost before submission.",
+              ],
               [
                 "Window",
                 "Future work remains queued. Expired work fails before execution.",
               ],
               [
                 "Stop condition",
-                "An observed violation can stop remaining queued cases.",
+                "An observed violation can stop queued work. Stop and expiry also request cancellation of an active live call.",
               ],
             ],
           },
@@ -302,6 +440,33 @@ const guides: Guide[] = [
         ],
       },
       {
+        id: "launch-a-live-campaign",
+        title: "Launch a live campaign",
+        blocks: [
+          {
+            kind: "list",
+            items: [
+              "Configure the caller, Twilio controls, billing ceiling, signing keys and recording hosts using Integrations.",
+              "Register a phone target you own or have explicit permission to test.",
+              "Select Live Bolna call, set an affordable budget and authorize the displayed scope.",
+              "Select Authorize and launch live campaign only when you intend to place real calls.",
+              "Open each run to connect trusted backend events and inspect provider execution, budget reservations and actual recording availability.",
+            ],
+            ordered: true,
+          },
+          {
+            kind: "text",
+            text: "The server captures the caller template, effective model, scenario prompts, scope and billing interpretation. The worker provisions an isolated caller for the case and verifies its captured configuration before dispatch. It does not rewrite the target to make the attack easier.",
+          },
+          {
+            kind: "note",
+            title: "Uncertain submission does not trigger a replacement call",
+            text: "A timeout after submission can mean the provider accepted the call. The worker retains the slot and reservation while reconciling. An owner can link a known existing execution from the run page; the worker still verifies its target, caller and run correlation.",
+            warning: true,
+          },
+        ],
+      },
+      {
         id: "review-the-evidence",
         title: "Review the evidence",
         blocks: [
@@ -309,7 +474,7 @@ const guides: Guide[] = [
             kind: "list",
             ordered: true,
             items: [
-              "Open a completed case from the campaign or Findings.",
+              "Open a finished case from the campaign or Findings. Failed or cancelled calls can still contain a reviewable policy violation.",
               "Read the transcript and compare its claims with the Timeline and Raw Events tabs.",
               "Check the required verification event and the observed tool execution.",
               "Inspect the before and after account state. Unknown state remains unknown.",
@@ -318,7 +483,7 @@ const guides: Guide[] = [
           },
           {
             kind: "text",
-            text: "A reviewer decision is added to the audit history. It does not rewrite the deterministic verdict. Only completed candidate violations can be confirmed or dismissed.",
+            text: "A reviewer decision appends audit history without rewriting the deterministic verdict. Candidate violations can be confirmed or dismissed when the run is completed, failed or cancelled. The operational call status and business-policy outcome are separate.",
           },
         ],
       },
@@ -344,7 +509,7 @@ const guides: Guide[] = [
     group: "Build with Vouch",
     description:
       "Understand what a finding proves and what remains unknown before making a review decision.",
-    time: "5 min read",
+    time: "8 min read",
     sections: [
       {
         id: "the-current-policy",
@@ -436,7 +601,125 @@ const guides: Guide[] = [
           {
             kind: "note",
             title: "Integrity is not identity",
-            text: "A matching digest checks configuration content. It is not a signature proving who supplied the evidence. Production use still needs authenticated users and signed evidence correlation.",
+            text: "A matching digest checks captured configuration content. Backend facts arrive through separately signed per-run connector messages, and workspace sessions control who can retrieve or review the evidence. None of these mechanisms turns a spoken claim into trusted verification.",
+            warning: false,
+          },
+        ],
+      },
+      {
+        id: "signed-backend-connector",
+        title: "Connect trusted backend evidence",
+        blocks: [
+          {
+            kind: "text",
+            text: "A workspace owner opens a live run and explicitly selects Reveal run connector settings. The response contains a run-specific backend endpoint and signing key plus a different provider endpoint and key. Keep the backend key only in the authorized customer backend. Never put it in the caller prompt or browser application.",
+          },
+          {
+            kind: "table",
+            columns: ["Delivery field", "Contract"],
+            rows: [
+              ["batchId", "Fresh UUID for an immutable batch"],
+              [
+                "providerExecutionId",
+                "Actual stored provider execution identifier",
+              ],
+              [
+                "startSequence",
+                "First observation sequence in this batch, starting at 1",
+              ],
+              [
+                "events",
+                "Actual normalized observations from the backend instrumentation",
+              ],
+              [
+                "complete",
+                "Optional final totalEvents and at after the entire relevant log has been flushed",
+              ],
+            ],
+          },
+          {
+            kind: "text",
+            text: "Backend messages accept `identity.verified`, `tool.requested`, `tool.executed` and `backend.state` events from the backend source. Use integer relative milliseconds and account SYN-1042 for this versioned fictional policy. Number observations without gaps and follow the returned nextSequence. A provider key cannot submit backend facts or declare the verification log complete.",
+          },
+          {
+            kind: "text",
+            text: "Each delivery signs the Unix millisecond timestamp, a fresh nonce and canonical JSON joined with newline characters. HMAC-SHA256 uses the per-run key string as UTF-8 bytes and produces lowercase hexadecimal. Canonical JSON recursively sorts object keys in JavaScript UTF-16 order while preserving array order. Headers are `x-vouch-timestamp`, `x-vouch-nonce` and `x-vouch-signature`.",
+          },
+          {
+            kind: "code",
+            title: "Prepare a private connector directory",
+            language: "shell",
+            text: "umask 077\nmkdir -p .data/connector\nchmod 700 .data/connector",
+          },
+          {
+            kind: "text",
+            text: "Save a backend-only copy of the owner settings as `.data/connector/credentials.json`, containing backend.endpoint and backend.signingKey. Save an actual instrumented event batch as `.data/connector/backend-batch.json`. Keep the provider signing key in its separate provider bridge rather than distributing it to the backend connector.",
+          },
+          {
+            kind: "code",
+            title: "Sign and deliver a captured backend batch",
+            language: "shell",
+            text: "read -r -p 'Vouch origin ' VOUCH_BASE_URL\nexport VOUCH_BASE_URL\nchmod 600 .data/connector/credentials.json .data/connector/backend-batch.json\nnode --input-type=module <<'JS'\nimport { readFile } from 'node:fs/promises';\nimport { createHmac, randomUUID } from 'node:crypto';\nconst credentials = JSON.parse(await readFile('.data/connector/credentials.json', 'utf8'));\nconst batch = JSON.parse(await readFile('.data/connector/backend-batch.json', 'utf8'));\nconst base = process.env.VOUCH_BASE_URL;\nif (!base) throw new Error('Set VOUCH_BASE_URL to your Vouch origin');\nconst body = JSON.stringify(batch, (_key, value) =>\n  value && typeof value === 'object' && !Array.isArray(value)\n    ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]]))\n    : value\n);\nconst timestamp = String(Date.now());\nconst nonce = randomUUID();\nconst signature = createHmac('sha256', credentials.backend.signingKey)\n  .update([timestamp, nonce, body].join('\\n')).digest('hex');\nconst response = await fetch(new URL(credentials.backend.endpoint, base), {\n  method: 'POST',\n  headers: {\n    'content-type': 'application/json',\n    'x-vouch-timestamp': timestamp,\n    'x-vouch-nonce': nonce,\n    'x-vouch-signature': signature\n  },\n  body,\n  redirect: 'error'\n});\nif (!response.ok) throw new Error('Evidence delivery failed with HTTP ' + response.status);\nconsole.log(await response.json());\nJS",
+          },
+          {
+            kind: "text",
+            text: "The command reads private files and uses Node standard crypto without a third-party SDK. Never invent tool or verification events. Signed machine callbacks use their own run-scoped HMAC credentials rather than browser sessions or CSRF tokens.",
+          },
+          {
+            kind: "text",
+            text: "Deliveries have a five-minute timestamp tolerance and nonce replay protection. Retrying the same batch returns a duplicate acknowledgement without duplicating its events. Reusing a batch identifier with changed content is rejected. After flushing every observation, a final empty batch declares the exact totalEvents and final at. Without that completeness assertion, absent verification cannot be established.",
+          },
+        ],
+      },
+      {
+        id: "recordings-and-privacy",
+        title: "Recordings and privacy",
+        blocks: [
+          {
+            kind: "text",
+            text: "Live recording retrieval accepts only exact approved HTTPS hosts, verified TLS, bounded sizes and checked audio content types. Stored files use AES-256-GCM with per-file nonces and identity-bound metadata. The browser plays an authenticated Vouch stream with byte-range support instead of receiving provider credentials or a raw provider recording URL.",
+          },
+          {
+            kind: "text",
+            text: "Missing provider audio remains unavailable. Live calls never fall back to browser speech synthesis. Fixture replay remains an explicitly synthetic reading of the fixture transcript.",
+          },
+          {
+            kind: "text",
+            text: "If a finished live run has missing provider artifacts, an owner can select Retry recording. Recovery can retrieve a missing final transcript and an existing correlated recording without placing a call or changing backend facts and the verdict. HTTP 409 can represent partial recovery when one artifact arrived and another remains unavailable. The run refreshes after both successful and failed retrieval so any recovered transcript becomes visible. Redacted transcript text and discarded or expired recordings are never restored.",
+          },
+          {
+            kind: "text",
+            text: "Workspace owners can permanently delete a recording or redact transcript text after a run finishes. Redaction preserves backend facts, the verdict, an audit marker and integrity digests. Recording deletion and transcript redaction are separate actions. Backup copies need their own expiry policy.",
+          },
+          {
+            kind: "table",
+            columns: ["Server setting", "Behavior"],
+            rows: [
+              [
+                "VOUCH_ARTIFACT_KEY",
+                "Independent private base64 key encoding 32 bytes",
+              ],
+              [
+                "VOUCH_ARTIFACT_DIR",
+                "Private encrypted-file directory, default .data/artifacts",
+              ],
+              [
+                "VOUCH_ARTIFACT_RETENTION_DAYS",
+                "Recording lifetime, default 30 days",
+              ],
+              [
+                "VOUCH_ARTIFACT_MAX_BYTES",
+                "Download limit, default 33554432 bytes",
+              ],
+              [
+                "VOUCH_RECORDING_HOSTS",
+                "Exact approved public HTTPS recording hosts",
+              ],
+            ],
+          },
+          {
+            kind: "text",
+            text: "An owner can select Discard recording even when audio never arrived. This permanent privacy action records an audit marker and disables future recording recovery. Once the transcript is captured or intentionally redacted too, the worker can finish cleaning the isolated caller history without waiting forever for unavailable media.",
           },
         ],
       },
@@ -448,7 +731,7 @@ const guides: Guide[] = [
     group: "Build with Vouch",
     description:
       "Configure the provider boundary without confusing a successful connection check with a working live campaign.",
-    time: "4 min read",
+    time: "8 min read",
     sections: [
       {
         id: "synthetic-runtime",
@@ -468,27 +751,68 @@ const guides: Guide[] = [
             kind: "table",
             columns: ["Server setting", "Purpose"],
             rows: [
-              [
-                "BOLNA_API_KEY",
-                "Secret credential sent only to the hosted Bolna API",
-              ],
+              ["BOLNA_API_KEY", "Hosted credential kept only on the server"],
               [
                 "BOLNA_AGENT_ID",
-                "Explicitly chosen caller agent for a read-only configuration check",
+                "Explicit Twilio-backed caller template with one conversation task",
+              ],
+              [
+                "TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN",
+                "Same-account carrier identity checks, duration controls and cancellation",
               ],
               [
                 "AUTHORIZED_PHONE_NUMBERS",
-                "Operator-managed exact E.164 phone allowlist, separated by commas",
+                "Operator-managed exact E.164 target allowlist",
               ],
               [
-                "VOUCH_INGEST_TOKEN",
-                "Independent secret protecting target-side evidence ingestion",
+                "VOUCH_LIVE_ENABLED",
+                "Explicit true flag required before real submission",
+              ],
+              [
+                "VOUCH_EVIDENCE_SIGNING_KEY",
+                "Private base64 32-byte master key for separate run-scoped connectors",
+              ],
+              [
+                "VOUCH_ARTIFACT_KEY",
+                "Independent private base64 32-byte recording encryption key",
+              ],
+              [
+                "VOUCH_RECORDING_HOSTS",
+                "Exact approved HTTPS recording storage hosts",
               ],
             ],
           },
           {
             kind: "text",
             text: "Use secure environment settings or a private ignored `.env` file. Never put secrets in frontend variables, source files, exported examples, or chat. Register a phone target only with an authorization reference and an exact allowlist match.",
+          },
+          {
+            kind: "table",
+            columns: ["Billing setting", "Required contract"],
+            rows: [
+              [
+                "VOUCH_SYNTHETIC_CHALLENGE",
+                "Fictional challenge accepted by the approved sandbox account and captured only for the benign control",
+              ],
+              ["BOLNA_COST_UNIT", "Explicit usd or cents interpretation"],
+              ["BOLNA_COST_CURRENCY", "USD"],
+              [
+                "BOLNA_FINAL_COST_VERIFIED",
+                "true only after the operator establishes finalized all-component billing semantics",
+              ],
+              [
+                "VOUCH_BOLNA_MAX_CENTS_PER_MINUTE",
+                "Positive conservative ceiling covering model, speech, platform and telephony charges",
+              ],
+              [
+                "VOUCH_BOLNA_SETUP_CENTS",
+                "Nonnegative ceiling for additional per-call charges",
+              ],
+              [
+                "VOUCH_RATE_CEILING_CONFIRMED",
+                "true only after confirming the configured ceiling covers the actual services",
+              ],
+            ],
           },
         ],
       },
@@ -512,17 +836,25 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "note",
-            title: "Live dispatch is disabled",
-            text: "Adding an API key does not enable calls. Provider-supported cancellation, hard maximum duration, monetary reservation, reconciliation, recording ingestion, and target-side evidence correlation must be implemented and verified first.",
+            title: "Live dispatch requires configured controls",
+            text: "Submission, isolated caller provisioning, resource reservations, carrier cancellation, reconciliation, signed evidence and recording ingestion are implemented. Missing credentials, account capabilities or billing settings still block dispatch. Adding an API key alone is insufficient.",
             warning: true,
           },
           {
             kind: "text",
-            text: "The current environment has not verified provider authentication or a live call. Network policy can block the connection before credentials reach Bolna. A configured variable alone is not proof of a valid key.",
+            text: "The first implemented path requires a Twilio-backed Bolna caller with one conversation task and no inherited tools, transfers or graph flow. The caller is captured and isolated per run. Bolna termination is configured below the authorized duration, Twilio applies a correlated carrier-side time limit, and stop requests use verified call ownership before cancellation.",
           },
           {
             kind: "text",
-            text: "SIP, WebSocket, WebRTC bridges, Cartesia, and additional caller runtimes are not implemented. Production authentication and tenant isolation are also required before exposing the workspace beyond loopback.",
+            text: "The worker commits a reservation and submission marker before contacting the provider. An ambiguous result never triggers an automatic duplicate. Missing final cost preserves the reservation and global slot. A configured rate ceiling is an admission bound, not a claim that the provider account has its own hard spending cap.",
+          },
+          {
+            kind: "text",
+            text: "No actual provider authentication, live conversation, carrier enforcement or final billing behavior is claimed as verified for this delivery. Your team must perform those acceptance checks with the authorized account. Network policy can block access before a credential reaches the provider.",
+          },
+          {
+            kind: "text",
+            text: "SIP, WebSocket and WebRTC bridges, Cartesia and additional caller runtimes remain expansion integrations. They are not required for the implemented first PSTN path and are not presented as available.",
           },
         ],
       },
@@ -534,21 +866,83 @@ const guides: Guide[] = [
     group: "Build with Vouch",
     description:
       "Explore the local HTTP surface, inspect a run, and retrieve its regression artifact.",
-    time: "5 min read",
+    time: "8 min read",
     sections: [
       {
         id: "local-boundary",
-        title: "Local boundary",
+        title: "Access boundary",
         blocks: [
           {
             kind: "text",
-            text: "The default base URL is `http://127.0.0.1:4000`. Responses use JSON unless an endpoint downloads a regression artifact. The API rejects untrusted hosts and mutation origins. It is not a production multi-user API.",
+            text: "The default development base URL is `http://127.0.0.1:4000`. Local fixture mode is loopback-only. Session mode requires a signed-in workspace membership for product data. Production requires an exact HTTPS PUBLIC_ORIGIN. Responses are JSON except recording streams and downloaded regression artifacts.",
+          },
+          {
+            kind: "text",
+            text: "Every session-authenticated mutation needs the session cookie, trusted Origin and X-Vouch-CSRF returned by the session endpoint. Login needs the trusted Origin before a session exists. Browser controls handle this automatically. Signed machine evidence callbacks use their independent HMAC authentication.",
           },
           {
             kind: "code",
-            title: "Read workspace summaries",
+            title: "Sign in from a private command-line session",
             language: "shell",
-            text: "curl --fail http://127.0.0.1:4000/api/overview",
+            text: 'umask 077\nmkdir -p .data/client\nchmod 700 .data/client\nread -r -p \'Vouch origin \' VOUCH_BASE_URL\nread -r -p \'Email \' VOUCH_EMAIL\nread -r -s -p \'Password \' VOUCH_PASSWORD\nprintf \'\\n\'\nVOUCH_LOGIN_EMAIL="$VOUCH_EMAIL" VOUCH_LOGIN_PASSWORD="$VOUCH_PASSWORD" \\\n  node -e \'process.stdout.write(JSON.stringify({email:process.env.VOUCH_LOGIN_EMAIL,password:process.env.VOUCH_LOGIN_PASSWORD}))\' |\n  curl --fail --silent --show-error \\\n    --header "Origin: $VOUCH_BASE_URL" \\\n    --header \'Content-Type: application/json\' \\\n    --cookie-jar .data/client/cookies \\\n    --data-binary @- \\\n    "$VOUCH_BASE_URL/api/auth/login" \\\n    --output .data/client/session.json\nunset VOUCH_PASSWORD\nVOUCH_CSRF_TOKEN=$(node -e \'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(".data/client/session.json","utf8")).csrfToken ?? "")\')',
+          },
+          {
+            kind: "text",
+            text: "Use the exact configured origin without a trailing slash. Cookie and session files contain private session material and stay under ignored .data. Never share them. The examples below reuse the same shell variables and private cookie file.",
+          },
+          {
+            kind: "code",
+            title: "Read a page of workspace summaries",
+            language: "shell",
+            text: 'curl --fail --cookie .data/client/cookies \\\n  "$VOUCH_BASE_URL/api/overview?limit=50&offset=0"',
+          },
+          {
+            kind: "code",
+            title: "Run a read-only provider check with session protection",
+            language: "shell",
+            text: 'curl --fail --cookie .data/client/cookies \\\n  --header "Origin: $VOUCH_BASE_URL" \\\n  --header "X-Vouch-CSRF: $VOUCH_CSRF_TOKEN" \\\n  --header \'Content-Type: application/json\' \\\n  --data \'{}\' \\\n  "$VOUCH_BASE_URL/api/integrations/bolna/check"',
+          },
+        ],
+      },
+      {
+        id: "session-endpoints",
+        title: "Session and workspace endpoints",
+        blocks: [
+          {
+            kind: "table",
+            columns: ["Method and route", "Behavior"],
+            rows: [
+              [
+                "GET /api/auth/session",
+                "Read authentication state, user, current workspace, memberships and CSRF value",
+              ],
+              ["POST /api/auth/login", "Sign in with email and password"],
+              [
+                "POST /api/auth/logout",
+                "Revoke the session and clear its cookie",
+              ],
+              [
+                "POST /api/auth/workspace",
+                "Switch to an existing membership using workspaceId",
+              ],
+              ["POST /api/auth/workspaces", "Create a workspace using name"],
+              [
+                "GET or POST /api/auth/members",
+                "Owner-only listing or member provisioning",
+              ],
+              [
+                "DELETE /api/auth/members/{userId}",
+                "Owner-only removal with last-owner protection",
+              ],
+              [
+                "POST /api/auth/password",
+                "Rotate currentPassword to newPassword and revoke all user sessions",
+              ],
+            ],
+          },
+          {
+            kind: "text",
+            text: "Before sign-in, the session endpoint returns authenticated false with HTTP 200. Other product reads return 401. The selected workspace comes from the server session, not a client-supplied tenant header. Cross-workspace run identifiers return 404.",
           },
         ],
       },
@@ -563,7 +957,7 @@ const guides: Guide[] = [
               ["GET /api/health", "Check the API and PostgreSQL connection"],
               [
                 "GET /api/overview",
-                "Read target, campaign, and run summaries with live readiness flags",
+                "Read paginated campaigns with associated runs, global counts and live readiness",
               ],
               [
                 "POST /api/targets",
@@ -571,17 +965,17 @@ const guides: Guide[] = [
               ],
               [
                 "POST /api/campaigns",
-                "Capture and queue a scoped synthetic campaign",
+                "Capture mode fixture or live with a registered target and immutable scope",
               ],
               [
                 "POST /api/campaigns/{campaignId}/stop",
-                "Stop the campaign and cancel queued cases",
+                "Stop queued work and request active live cancellation",
               ],
             ],
           },
           {
             kind: "text",
-            text: "Target creation requires a name, transport, explicit authorization, and an authorization reference. Campaign creation requires a name, registered target ID, and the complete validated scope. Use the workspace form to create a correctly bounded first campaign.",
+            text: "Target creation requires a name, transport, explicit authorization and an authorization reference. Campaign creation includes mode, targetId and the full validated scope. Overview accepts limit from 1 to 100 and a nonnegative offset, returning pagination metadata plus global summary counts. Use the workspace form for a correctly bounded first campaign.",
           },
         ],
       },
@@ -595,11 +989,11 @@ const guides: Guide[] = [
             rows: [
               [
                 "GET /api/runs/{runId}",
-                "Read captured configuration, evidence, verdict, integrity and review history",
+                "Read configuration, evidence, verdict, integrity, review history, safe execution status and artifact metadata",
               ],
               [
                 "POST /api/runs/{runId}/review",
-                "Confirm or dismiss a completed candidate violation with a note",
+                "Review a terminal completed, failed or cancelled candidate violation with a rationale",
               ],
               [
                 "POST /api/runs/{runId}/rerun",
@@ -609,13 +1003,17 @@ const guides: Guide[] = [
                 "GET /api/runs/{runId}/export",
                 "Download the versioned regression JSON artifact",
               ],
+              [
+                "POST /api/runs/{runId}/reconcile",
+                "Owner-only binding of a known existing providerExecutionId for independent worker verification",
+              ],
             ],
           },
           {
             kind: "code",
             title: "Inspect and export an existing run",
             language: "shell",
-            text: 'read -r -p \'Run UUID \' VOUCH_RUN_ID\ncurl --fail "http://127.0.0.1:4000/api/runs/$VOUCH_RUN_ID"\ncurl --fail "http://127.0.0.1:4000/api/runs/$VOUCH_RUN_ID/export" \\\n  --output vouch-regression.json',
+            text: 'read -r -p \'Run UUID \' VOUCH_RUN_ID\ncurl --fail --cookie .data/client/cookies \\\n  "$VOUCH_BASE_URL/api/runs/$VOUCH_RUN_ID"\ncurl --fail --cookie .data/client/cookies \\\n  "$VOUCH_BASE_URL/api/runs/$VOUCH_RUN_ID/export" \\\n  --output vouch-regression.json',
           },
           {
             kind: "text",
@@ -625,30 +1023,59 @@ const guides: Guide[] = [
       },
       {
         id: "connector-contract",
-        title: "Connector contract",
+        title: "Signed connectors and recordings",
         blocks: [
           {
             kind: "table",
             columns: ["Method and route", "Behavior"],
             rows: [
               [
-                "POST /api/integrations/bolna/check",
-                "Perform a read-only provider connection check",
+                "GET /api/runs/{runId}/connector-credentials",
+                "Owner-only run-scoped backend and provider settings",
               ],
               [
-                "POST /api/runs/{runId}/evidence",
-                "Accept authenticated normalized events for an active non-synthetic run",
+                "POST /api/runs/{runId}/backend-events",
+                "Signed ordered backend observations and explicit log completion",
+              ],
+              [
+                "POST /api/runs/{runId}/provider-events",
+                "Separately signed transcript and provider observations",
+              ],
+              [
+                "GET /api/runs/{runId}/artifacts",
+                "Authenticated recording metadata list",
+              ],
+              [
+                "GET /api/runs/{runId}/artifacts/{artifactId}",
+                "Authenticated decrypted audio stream with byte ranges",
+              ],
+              [
+                "DELETE /api/runs/{runId}/artifacts/{artifactId}",
+                "Owner-only permanent recording deletion",
+              ],
+              [
+                "POST /api/runs/{runId}/redact-transcript",
+                "Owner-only terminal transcript redaction preserving backend facts",
+              ],
+              [
+                "POST /api/runs/{runId}/artifacts/retry",
+                "Owner-only recovery of missing final transcript or recording without another call",
+              ],
+              [
+                "POST /api/runs/{runId}/artifacts/redact",
+                "Owner-only permanent recording discard, including audio that never arrived",
               ],
             ],
           },
           {
             kind: "text",
-            text: "Evidence ingestion requires a Bearer credential matching `VOUCH_INGEST_TOKEN`. Synthetic evidence is immutable through this route. The event envelope contains `kind`, `source`, an integer millisecond `at`, and a JSON `data` object. Valid kinds include transcript, tool request, tool execution, identity verification, backend state, and provider event.",
+            text: "Use the Evidence guide for canonical JSON signing, stream sequences, replay protection and final completeness. Backend and provider credentials are distinct. Synthetic runs reject live connector ingestion. The old shared bearer evidence endpoint is retired and cannot be used to bypass signed per-run correlation.",
           },
           {
             kind: "note",
-            title: "A contract is not a live connector",
-            text: "The authenticated ingestion route is tested, but live run creation and actual customer evidence connectors are not implemented. Do not interpret this endpoint as proof of live provider support.",
+            title: "Unavailable evidence stays unavailable",
+            text: "A live connection or completed provider status cannot prove a backend tool result. Only authenticated backend observations establish those facts. Recordings require successful ingestion from an approved host and remain unavailable when missing.",
+            warning: false,
           },
         ],
       },
@@ -662,16 +1089,31 @@ const guides: Guide[] = [
             rows: [
               [
                 "400",
-                "Invalid input, expired scope, exhausted slots, incompatible capture or provider failure",
+                "Invalid input, scope exhaustion, incompatible capture or provider contract failure",
               ],
-              ["401", "Missing or invalid evidence-ingestion credential"],
+              [
+                "401",
+                "Missing or invalid session or signed connector credential",
+              ],
               [
                 "403",
-                "Untrusted host or origin, or a phone outside the operator allowlist",
+                "Untrusted origin, invalid CSRF, insufficient role or disallowed phone",
               ],
-              ["404", "Missing run, unknown route, or a private file URL"],
-              ["413", "JSON body exceeds 512 KB"],
-              ["500", "Database operation failed"],
+              [
+                "404",
+                "Unknown or inaccessible workspace record, expired artifact or private file",
+              ],
+              ["410", "Retired shared evidence ingestion endpoint"],
+              ["413", "Request body exceeds its configured boundary"],
+              ["429", "Rate-limited authentication attempt"],
+              [
+                "500 or 503",
+                "Service failure or missing required operational configuration",
+              ],
+              [
+                "409",
+                "Provider artifacts still incomplete, possibly after partial transcript or recording recovery",
+              ],
             ],
           },
           {
@@ -716,7 +1158,7 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "text",
-            text: "Check the authorized start time and confirm the worker is running. Future campaigns remain queued by design. One fixture runs globally at a time, so another active case can delay the next job. A malformed or expired stored scope fails before execution.",
+            text: "Check the authorized start time and worker heartbeat. Future campaigns remain queued by design. One case runs globally at a time. An unresolved live dispatch or unfinalized cost intentionally holds the slot and reservation rather than permitting a second call. Inspect its execution status before changing the queue.",
           },
           {
             kind: "code",
@@ -756,11 +1198,69 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "text",
-            text: "Unknown evidence means the required observation has not been established. Do not infer a backend change from a spoken answer. Fixture transcripts can be replayed with local browser speech voices, but no actual recording exists. If speech is unavailable, read the complete transcript and event timeline.",
+            text: "Unknown evidence means an observation has not been established. For live cases, check the signed connector sequence, actual provider execution identity, complete-log marker, recording host allowlist and encryption key. Missing audio is never replaced with synthetic speech. Fixtures can replay only their transcript using local browser voices.",
           },
           {
             kind: "text",
             text: "A timed-out evidence request offers retry. Failed background refreshes retain the last fetched evidence with a warning. Tabs pause scheduled polling while hidden and refresh when visible again.",
+          },
+        ],
+      },
+      {
+        id: "session-or-workspace-access",
+        title: "Session or workspace access",
+        blocks: [
+          {
+            kind: "text",
+            text: "A 401 requires signing in again. A 403 can mean an untrusted Origin, missing CSRF value or insufficient owner role. Refresh session state after signing in and keep the cookie jar and CSRF value together for command-line requests. A 404 for a known identifier can mean it belongs to another workspace.",
+          },
+          {
+            kind: "text",
+            text: "Switch workspaces through the workspace control. Password changes revoke all sessions. A workspace owner can provision access without an email integration. Local fixture mode cannot be used for production access and production cookies require HTTPS.",
+          },
+        ],
+      },
+      {
+        id: "operations-and-recovery",
+        title: "Retention and recovery",
+        blocks: [
+          {
+            kind: "code",
+            title: "Inspect retention candidates without deleting",
+            language: "shell",
+            text: "docker compose --env-file .env.production --profile operations run --rm -T maintenance",
+          },
+          {
+            kind: "code",
+            title: "Apply bounded retention maintenance",
+            language: "shell",
+            text: "docker compose --env-file .env.production --profile operations run --rm -T maintenance \\\n  node dist/server/scripts/maintenance.js --apply",
+          },
+          {
+            kind: "text",
+            text: "Expired recordings and sessions can be cleaned in bounded batches. Campaign evidence remains unless VOUCH_RUN_RETENTION_DAYS is explicitly set. Unresolved calls and unsettled costs never expire just because they are old. Schedule maintenance and alert on failures.",
+          },
+          {
+            kind: "code",
+            title: "Back up stopped writers to a new destination",
+            language: "shell",
+            text: "docker compose --env-file .env.production stop api worker\nmkdir -p .data/backups\nbash scripts/backup.sh .data/backups/snapshot-001\ndocker compose --env-file .env.production up -d api worker",
+          },
+          {
+            kind: "text",
+            text: "Stop maintenance and migration jobs as well before taking a consistent backup. The destination must not already exist. Preserve the database and encrypted artifact files together, with the encryption key protected separately. Restore only into empty storage and perform recovery acceptance before enabling calls.",
+          },
+          {
+            kind: "code",
+            title: "Restore into an empty deployment target",
+            language: "shell",
+            text: "docker compose --env-file .env.production up -d database\nbash scripts/restore.sh .data/backups/snapshot-001\ndocker compose --env-file .env.production run --rm -T migrate\ndocker compose --env-file .env.production up -d api worker",
+          },
+          {
+            kind: "note",
+            title: "Recovery is operator work",
+            text: "These scripts refuse destructive overwrite, but a successful static build does not establish recovery. Exercise backup, restoration, recording decryption, workspace isolation and provider reconciliation before using the deployment for customer data.",
+            warning: true,
           },
         ],
       },

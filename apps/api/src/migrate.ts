@@ -1,6 +1,12 @@
-import { db } from "./db";
+import { db, transaction, withSystemDatabase } from "./db";
+import { migrateLive } from "./live";
+import { migrateEvidence } from "./evidence";
+import { migrateAuth } from "./auth";
 export async function migrate() {
-  await db.query(`
+  await withSystemDatabase(() =>
+    transaction(async (c) => {
+      await c.query("SELECT pg_advisory_xact_lock(864211)");
+      await c.query(`
 CREATE TABLE IF NOT EXISTS targets(id uuid PRIMARY KEY, name text NOT NULL, transport text NOT NULL CHECK(transport IN ('fixture','pstn')), phone text, authorization_reference text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS campaigns(id uuid PRIMARY KEY, name text NOT NULL, target_id uuid NOT NULL REFERENCES targets(id), mode text NOT NULL, scope jsonb NOT NULL, config jsonb NOT NULL, config_hash text NOT NULL, status text NOT NULL DEFAULT 'queued', calls_used integer NOT NULL DEFAULT 0, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS runs(id uuid PRIMARY KEY,campaign_id uuid NOT NULL REFERENCES campaigns(id), scenario text NOT NULL, status text NOT NULL DEFAULT 'queued', synthetic boolean NOT NULL DEFAULT true, config jsonb NOT NULL, verdict jsonb, review text NOT NULL DEFAULT 'pending' CHECK(review IN ('pending','confirmed','dismissed')), review_note text, error text, started_at timestamptz, finished_at timestamptz, created_at timestamptz NOT NULL DEFAULT now());
@@ -10,6 +16,16 @@ CREATE TABLE IF NOT EXISTS reviews(id uuid PRIMARY KEY,run_id uuid NOT NULL REFE
 CREATE INDEX IF NOT EXISTS runs_queue ON runs(status,created_at);
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS config_hash_algorithm text NOT NULL DEFAULT 'sha256-json-stringify-v1';
 `);
+      await migrateLive(c);
+      await migrateEvidence(c);
+      await migrateAuth(c);
+      await c.query(`
+    CREATE INDEX IF NOT EXISTS campaigns_workspace_created ON campaigns(workspace_id,created_at DESC,id DESC);
+    CREATE INDEX IF NOT EXISTS runs_campaign_created ON runs(campaign_id,created_at DESC);
+    CREATE INDEX IF NOT EXISTS reviews_run_created ON reviews(run_id,created_at);
+  `);
+    }),
+  );
 }
 if (import.meta.url === new URL(process.argv[1], "file:").href) {
   await migrate();

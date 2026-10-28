@@ -1,0 +1,268 @@
+.auth-page {
+  min-height: 100svh;
+  background: var(--surface-base, #fcfcfc);
+  position: relative;
+  overflow: hidden;
+}
+.auth-page > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px clamp(20px, 5vw, 80px);
+  border-bottom: 1px solid #e4e4e4;
+  gap: 20px;
+}
+.auth-page > header > a {
+  color: #535358;
+  font-size: 13px;
+}
+.auth-main {
+  position: relative;
+  z-index: 1;
+  max-width: 560px;
+  padding: clamp(40px, 8vh, 100px) 24px 80px;
+  margin: 0 auto;
+}
+.auth-main h1 {
+  font-size: clamp(40px, 6vw, 60px);
+  line-height: 1.08;
+  letter-spacing: -0.055em;
+  margin: 22px 0 28px;
+}
+.auth-main h1 span {
+  color: #77777b;
+}
+.auth-login .button {
+  justify-content: space-between;
+}
+.auth-art {
+  position: absolute;
+  right: 6vw;
+  bottom: 4vh;
+  opacity: 0.5;
+  pointer-events: none;
+}
+.auth-art img {
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.session-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  min-width: 0;
+}
+.session-controls > select {
+  max-width: 150px;
+  padding: 8px 24px 8px 8px;
+  font-size: 12px;
+  background-color: transparent;
+  border: 0;
+  border-radius: 8px;
+}
+.session-error {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 240px;
+  padding: 12px;
+  color: #8e391e;
+  background: #fff6f2;
+  border-radius: 12px;
+  font-size: 12px;
+  z-index: 6;
+}
+.account-settings {
+  display: grid;
+  gap: 16px;
+}
+.account-settings > p {
+  overflow-wrap: anywhere;
+}
+.account-settings details {
+  border-top: 1px solid #e4e4e4;
+  padding-top: 18px;
+}
+.account-settings summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.account-settings form {
+  margin-top: 20px;
+}
+.history-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 0;
+  border-top: 1px solid #e4e4e4;
+  flex-wrap: wrap;
+}
+.history-pagination > span {
+  font-size: 13px;
+  color: #65656b;
+}
+.history-pagination > div {
+  display: flex;
+  gap: 12px;
+}
+.live-execution {
+  padding: 24px 0;
+  border-bottom: 1px solid #e4e4e4;
+}
+.live-execution dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.live-execution dt {
+  color: #65656b;
+  font-size: 12px;
+}
+.live-execution dd {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+.connector-setup {
+  padding: 24px 0;
+  border-top: 1px solid #e4e4e4;
+}
+.connector-setup pre {
+  max-height: 350px;
+  overflow: auto;
+  font-size: 11px;
+  padding: 16px;
+  background: #f0f0ee;
+  border-radius: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.connector-setup .button {
+  margin: 8px 8px 8px 0;
+}
+.recording-player {
+  width: 100%;
+  margin: 12px 0;
+}
+.recording-player audio {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+}
+@media (max-width: 1000px) {
+  .auth-art {
+    display: none;
+  }
+  .session-controls > select {
+    max-width: 105px;
+  }
+}
+@media (max-width: 600px) {
+  .session-controls .icon-button {
+    width: 30px;
+    height: 32px;
+    padding: 4px;
+  }
+  .session-controls > select {
+    max-width: 100px;
+    font-size: 11px;
+  }
+  .session-controls {
+    gap: 0;
+  }
+  .auth-page > header {
+    align-items: flex-start;
+  }
+  .auth-page > header > a {
+    max-width: 110px;
+    text-align: right;
+  }
+  .live-execution dl {
+    grid-template-columns: 1fr;
+  }
+}
+
+.workspace-members {
+  list-style: none;
+  padding: 0;
+  margin: 18px 0;
+}
+.workspace-members li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e4e4e4;
+}
+.workspace-members li > div {
+  min-width: 0;
+}
+.workspace-members strong,
+.workspace-members span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.workspace-members span {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #65656b;
+}
+
+.account-signout {
+  margin-top: 24px;
+}
+@media (max-width: 480px) {
+  .session-controls > .session-signout {
+    display: none;
+  }
+  .session-controls > select {
+    max-width: 74px;
+    padding-left: 2px;
+  }
+  body .workspace-app .workspace-identity {
+    gap: 5px;
+    min-width: 0;
+  }
+}
+
+.execution-reconciliation {
+  margin: 20px 0;
+  padding: 18px 0;
+  border-top: 1px solid #e4e4e4;
+}
+.execution-reconciliation summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.execution-reconciliation p {
+  max-width: 70ch;
+  font-size: 13px;
+  color: #65656b;
+  line-height: 1.7;
+}
+.execution-reconciliation .setup-form {
+  max-width: 480px;
+  margin-top: 18px;
+}
+
+.evidence-privacy {
+  margin: 24px 0;
+  padding: 24px 0;
+  border-top: 1px solid #e4e4e4;
+}
+.evidence-privacy summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.evidence-privacy p {
+  max-width: 70ch;
+  color: #65656b;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.evidence-privacy button {
+  margin: 8px 12px 8px 0;
+}

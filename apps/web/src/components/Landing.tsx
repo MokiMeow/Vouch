@@ -337,7 +337,7 @@ const questions = [
   },
   {
     q: "Are live Bolna calls available?",
-    a: "Not yet. The connector includes a read-only connection check. Outbound calls stay disabled until duration, spending and cancellation controls are implemented and validated.",
+    a: "The live PSTN path is implemented for a configured Twilio-backed Bolna caller. Dispatch requires explicit authorization, duration and cancellation controls, confirmed billing limits and signed evidence settings. Your team still needs to verify the account and run voice acceptance tests.",
   },
   {
     q: "What counts as a verified finding?",

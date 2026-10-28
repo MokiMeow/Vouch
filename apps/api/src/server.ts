@@ -1,47 +1,45 @@
 import "dotenv/config";
 import express from "express";
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   capturedPolicySchema,
   assertScope,
-  evaluate,
-  eventSchema,
   policy,
   scenarios,
   scopeSchema,
   targetSchema,
 } from "../../../packages/core/src/index";
 import { BolnaRuntime } from "./bolna";
-import { db, transaction } from "./db";
-import { appendEvent } from "./fixture";
+import { db, transaction, withSystemDatabase } from "./db";
 import {
   CONFIG_HASH_ALGORITHM,
   assertConfigurationHash,
   canonicalJson,
   configurationHash,
   configurationIntegrity,
-  currentPolicySchema,
 } from "./configuration";
 import { publicSite } from "./public-site";
+import {
+  authRouter,
+  bootstrapAuth,
+  requireWorkspace,
+  requireOwner,
+} from "./auth";
+import { installHttpSecurity, listenHost } from "./http-security";
+import {
+  captureLiveConfiguration,
+  liveReadiness,
+  requestLiveCancellation,
+  reconcileLiveExecution,
+  validateLiveReconciliation,
+} from "./live";
+import { evidenceRouter, signedEvidenceRouter } from "./evidence";
+import { listRunArtifacts } from "./artifacts";
+import type { LiveTarget } from "./live";
 const app = express();
-app.disable("x-powered-by");
+installHttpSecurity(app);
 app.use(express.json({ limit: "512kb" }));
-app.use((req, res, next) => {
-  if (!["127.0.0.1", "localhost"].includes(req.hostname))
-    return res.status(403).json({ error: "Untrusted request host" });
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Referrer-Policy", "no-referrer");
-  if (
-    req.method === "POST" &&
-    req.headers.origin &&
-    req.headers.origin !== `http://${req.headers.host}` &&
-    req.headers.origin !== "http://127.0.0.1:5173" &&
-    req.headers.origin !== "http://localhost:5173"
-  )
-    return res.status(403).json({ error: "Untrusted request origin" });
-  next();
-});
 const uuid = z.uuid();
 const routeId = (id: unknown) => uuid.parse(id);
 app.use("/api", (_req, res, next) => {
@@ -49,35 +47,69 @@ app.use("/api", (_req, res, next) => {
   next();
 });
 app.get("/api/health", async (_req, res) => {
-  await db.query("SELECT 1");
-  res.json({ status: "ok", database: "postgresql", mode: "local-development" });
+  try {
+    await withSystemDatabase(() => db.query("SELECT 1"));
+    res.json({ status: "ok", database: "postgresql" });
+  } catch {
+    res.status(503).json({ status: "unavailable" });
+  }
 });
-app.get("/api/overview", async (_req, res) => {
-  const [targets, campaigns, runs] = await Promise.all([
+app.get("/api/ready", async (_req, res) => {
+  try {
+    await withSystemDatabase(() => db.query("SELECT 1 FROM campaigns LIMIT 0"));
+    res.json({ status: "ready" });
+  } catch {
+    res.status(503).json({ status: "unavailable" });
+  }
+});
+app.use("/api", signedEvidenceRouter);
+app.use("/api/auth", authRouter);
+app.use("/api", requireWorkspace);
+app.use("/api", evidenceRouter);
+app.get("/api/overview", async (req, res) => {
+  const limit = z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .parse(req.query.limit ?? 50);
+  const offset = z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(1000000)
+    .parse(req.query.offset ?? 0);
+  const [targets, campaigns, runs, counts] = await Promise.all([
     db.query(
       "SELECT id,name,transport,phone,authorization_reference,created_at FROM targets ORDER BY created_at DESC",
     ),
     db.query(
-      "SELECT c.id,c.name,c.target_id,c.mode,c.scope,c.status,c.calls_used,c.created_at,t.name AS target_name FROM campaigns c JOIN targets t ON t.id=c.target_id ORDER BY c.created_at DESC",
+      "SELECT c.id,c.name,c.target_id,c.mode,c.scope,c.status,c.calls_used,c.created_at,t.name AS target_name FROM campaigns c JOIN targets t ON t.id=c.target_id ORDER BY c.created_at DESC,c.id DESC LIMIT $1 OFFSET $2",
+      [limit, offset],
     ),
     db.query(
-      "SELECT r.id,r.campaign_id,r.scenario,r.status,r.synthetic,r.verdict,r.review,r.created_at,c.name AS campaign_name,t.name AS target_name FROM runs r JOIN campaigns c ON c.id=r.campaign_id JOIN targets t ON t.id=c.target_id ORDER BY r.created_at DESC",
+      "SELECT r.id,r.campaign_id,r.scenario,r.status,r.synthetic,r.verdict,r.review,r.created_at,c.name AS campaign_name,t.name AS target_name FROM runs r JOIN campaigns c ON c.id=r.campaign_id JOIN targets t ON t.id=c.target_id WHERE c.id IN (SELECT id FROM campaigns ORDER BY created_at DESC,id DESC LIMIT $1 OFFSET $2) ORDER BY r.created_at DESC",
+      [limit, offset],
     ),
+    db.query(`SELECT (SELECT count(*) FROM campaigns)::int AS campaigns, count(*) FILTER (WHERE status='completed')::int AS runs, count(*)::int AS "totalRuns", count(*) FILTER (WHERE status IN ('queued','running','awaiting_evidence'))::int AS "activeRuns",
+      count(*) FILTER (WHERE verdict->>'outcome'='violation')::int AS candidates,
+      count(*) FILTER (WHERE verdict->>'tier'='backend_verified')::int AS "backendVerified",
+      count(*) FILTER (WHERE verdict->>'outcome'='violation' AND review='pending')::int AS "pendingFindings" FROM runs`),
   ]);
+  const summary = counts.rows[0];
   res.json({
     targets: targets.rows,
     campaigns: campaigns.rows,
     runs: runs.rows,
     policy,
-    live: {
-      configured: !!process.env.BOLNA_API_KEY,
-      agentConfigured: !!process.env.BOLNA_AGENT_ID,
-      verified: false,
-      enabled: false,
-      reason:
-        "Live dispatch is blocked until duration, cancellation and cost limits are verified.",
-      capabilities: new BolnaRuntime().capabilities(),
+    summary,
+    pagination: {
+      limit,
+      offset,
+      totalCampaigns: summary.campaigns,
+      hasMore: offset + campaigns.rows.length < summary.campaigns,
     },
+    live: liveReadiness(),
   });
 });
 app.post("/api/targets", async (req, res) => {
@@ -105,40 +137,62 @@ const campaignSchema = z
     name: z.string().trim().min(3).max(100),
     targetId: z.uuid(),
     scope: scopeSchema,
+    mode: z.enum(["fixture", "live"]).optional(),
   })
   .strict();
 app.post("/api/campaigns", async (req, res) => {
   const input = campaignSchema.parse(req.body);
+  const target = (
+    await db.query<LiveTarget>("SELECT * FROM targets WHERE id=$1", [
+      input.targetId,
+    ])
+  ).rows[0];
+  if (!target) return res.status(404).json({ error: "Target not found" });
+  const mode =
+    input.mode ?? (target.transport === "fixture" ? "fixture" : "live");
+  if ((mode === "fixture") !== (target.transport === "fixture"))
+    return res.status(400).json({
+      error: "Campaign mode must match the selected target transport",
+    });
+  if (Date.parse(input.scope.endsAt) <= Date.now())
+    throw new Error("The test window has already expired");
+  const config =
+    mode === "live"
+      ? await captureLiveConfiguration(target, input.scope)
+      : {
+          version: 1,
+          mode: "fixture",
+          policy,
+          target: {
+            id: target.id,
+            name: target.name,
+            transport: target.transport,
+            authorizationReference: target.authorization_reference,
+          },
+          scope: input.scope,
+          scenarios,
+          runtime: {
+            provider: "vouch-fixture",
+            apiFlavor: "fixture-v1",
+            model: "vouch-fixture-state-machine@1",
+          },
+        };
   const output = await transaction(async (c) => {
     const t = (
-      await c.query("SELECT * FROM targets WHERE id=$1", [input.targetId])
+      await c.query("SELECT * FROM targets WHERE id=$1 FOR SHARE", [
+        input.targetId,
+      ])
     ).rows[0];
-    if (!t) throw new Error("Target not found");
-    if (t.transport !== "fixture")
+    if (
+      !t ||
+      t.transport !== target.transport ||
+      t.phone !== target.phone ||
+      t.authorization_reference !== target.authorization_reference
+    )
       throw new Error(
-        "Live dispatch is not enabled: provider scope enforcement has not been verified. No call was placed.",
+        "The authorized target changed while preparing the campaign",
       );
-    if (Date.parse(input.scope.endsAt) <= Date.now())
-      throw new Error("The test window has already expired");
     const id = randomUUID();
-    const config = {
-      version: 1,
-      mode: "fixture",
-      policy,
-      target: {
-        id: t.id,
-        name: t.name,
-        transport: t.transport,
-        authorizationReference: t.authorization_reference,
-      },
-      scope: input.scope,
-      scenarios,
-      runtime: {
-        provider: "vouch-fixture",
-        apiFlavor: "fixture-v1",
-        model: "vouch-fixture-state-machine@1",
-      },
-    };
     const configHash = configurationHash(config);
     await c.query(
       "INSERT INTO campaigns(id,name,target_id,mode,scope,config,config_hash,config_hash_algorithm,calls_used) VALUES($1,$2,$3,$4,$5,$6,$7,$8,2)",
@@ -146,7 +200,7 @@ app.post("/api/campaigns", async (req, res) => {
         id,
         input.name,
         t.id,
-        "fixture",
+        mode,
         input.scope,
         config,
         configHash,
@@ -155,8 +209,8 @@ app.post("/api/campaigns", async (req, res) => {
     );
     for (const scenario of ["benign_control", "false_authority"])
       await c.query(
-        "INSERT INTO runs(id,campaign_id,scenario,config) VALUES($1,$2,$3,$4)",
-        [randomUUID(), id, scenario, config],
+        "INSERT INTO runs(id,campaign_id,scenario,config,synthetic) VALUES($1,$2,$3,$4,$5)",
+        [randomUUID(), id, scenario, config, mode === "fixture"],
       );
     return { id, configHash, configHashAlgorithm: CONFIG_HASH_ALGORITHM };
   });
@@ -168,7 +222,9 @@ app.post("/api/campaigns/:id/stop", async (req, res) => {
       "UPDATE campaigns SET status='stopped' WHERE id=$1 RETURNING id",
       [routeId(req.params.id)],
     );
-    if (!result.rows.length) throw new Error("Campaign not found");
+    if (!result.rows.length)
+      throw Object.assign(new Error("Campaign not found"), { status: 404 });
+    await requestLiveCancellation(c, req.params.id as string);
     await c.query(
       "UPDATE runs SET status='cancelled',finished_at=now() WHERE campaign_id=$1 AND status='queued'",
       [req.params.id],
@@ -194,8 +250,21 @@ app.get("/api/runs/:id", async (req, res) => {
       [id],
     )
   ).rows;
+  const [artifacts, liveExecution, privacy] = await Promise.all([
+    listRunArtifacts(id),
+    db.query(
+      "SELECT state,provider_execution_id,reserved_cents,settled_cents,deadline_at,last_error,terminal_at,cancel_requested,cleanup_state,cleanup_error,caller_deleted_at FROM live_executions WHERE run_id=$1",
+      [id],
+    ),
+    db.query(
+      "SELECT recording_redacted,transcript_redacted FROM provider_evidence_cursors WHERE run_id=$1",
+      [id],
+    ),
+  ]);
   res.json({
     ...r,
+    artifacts,
+    liveExecution: liveExecution.rows[0] ?? null,
     config_integrity: configurationIntegrity(
       r.config,
       r.config_hash,
@@ -204,10 +273,16 @@ app.get("/api/runs/:id", async (req, res) => {
     events,
     reviews,
     recording: {
-      available: false,
+      available: artifacts.length > 0,
+      redacted: privacy.rows[0]?.recording_redacted ?? false,
+      transcriptRedacted: privacy.rows[0]?.transcript_redacted ?? false,
       reason: r.synthetic
         ? "Synthetic fixture: no live call recording. Transcript replay uses browser speech synthesis."
-        : "Recording not ingested",
+        : privacy.rows[0]?.recording_redacted
+          ? "Recording discarded by the workspace owner"
+          : artifacts.length
+            ? "Actual provider recording archived securely"
+            : "Recording not ingested",
     },
   });
 });
@@ -223,8 +298,12 @@ app.post("/api/runs/:id/review", async (req, res) => {
   await transaction(async (c) => {
     const r = (await c.query("SELECT * FROM runs WHERE id=$1 FOR UPDATE", [id]))
       .rows[0];
-    if (!r || r.status !== "completed" || r.verdict?.outcome !== "violation")
-      throw new Error("Only a completed candidate finding can be reviewed");
+    if (!r) throw Object.assign(new Error("Run not found"), { status: 404 });
+    if (
+      !["completed", "failed", "cancelled"].includes(r.status) ||
+      r.verdict?.outcome !== "violation"
+    )
+      throw new Error("Only a finished candidate finding can be reviewed");
     await c.query(
       "INSERT INTO reviews(id,run_id,decision,note) VALUES($1,$2,$3,$4)",
       [randomUUID(), id, body.decision, body.note],
@@ -245,12 +324,13 @@ app.post("/api/runs/:id/rerun", async (req, res) => {
         [routeId(req.params.id)],
       )
     ).rows[0];
-    if (!original) throw new Error("Run not found");
+    if (!original)
+      throw Object.assign(new Error("Run not found"), { status: 404 });
     if (original.campaign_status === "stopped")
       throw new Error(
         "Campaign was stopped. Register a new authorized campaign to continue.",
       );
-    if (original.status !== "completed" && original.status !== "failed")
+    if (!["completed", "failed", "cancelled"].includes(original.status))
       throw new Error("Wait for the original run to finish");
     const s = scopeSchema.parse(original.scope);
     assertConfigurationHash(
@@ -298,6 +378,7 @@ app.get("/api/runs/:id/export", async (req, res) => {
       [id],
     )
   ).rows;
+  const artifacts = await listRunArtifacts(id);
   const capturedPolicy = capturedPolicySchema.parse(r.config.policy);
   res.attachment(`vouch-${id.slice(0, 8)}-regression.v1.json`).json({
     schema: "vouch.regression",
@@ -321,58 +402,39 @@ app.get("/api/runs/:id/export", async (req, res) => {
     observed: r.verdict,
     review: { status: r.review, history: reviews },
     evidence: events,
-    recording: { available: false },
+    recording: {
+      available: artifacts.length > 0,
+      artifacts,
+    },
     note: "Replays preserve configuration; outcomes are reevaluated from newly ingested evidence.",
   });
 });
-// External backend telemetry is a distinct trust boundary, unavailable without an operator secret.
-app.post("/api/runs/:id/evidence", async (req, res) => {
-  const expected = process.env.VOUCH_INGEST_TOKEN;
-  const received = req.headers.authorization?.replace(/^Bearer /, "") ?? "";
-  if (
-    !expected ||
-    !timingSafeEqual(
-      createHash("sha256").update(expected).digest(),
-      createHash("sha256").update(received).digest(),
-    )
-  )
-    return res
-      .status(401)
-      .json({ error: "Valid backend evidence credentials are required" });
-  const event = eventSchema.parse(req.body);
-  await transaction(async (c) => {
-    const r = (
-      await c.query(
-        "SELECT r.*,c.scope,c.config_hash,c.config_hash_algorithm FROM runs r JOIN campaigns c ON c.id=r.campaign_id WHERE r.id=$1 FOR UPDATE OF r,c",
-        [routeId(req.params.id)],
-      )
-    ).rows[0];
-    if (!r || r.synthetic || r.status !== "running")
-      throw new Error(
-        "External ingestion requires an active live run; fixture evidence is immutable",
-      );
-    currentPolicySchema.parse(r.config.policy);
-    assertConfigurationHash(r.config, r.config_hash, r.config_hash_algorithm);
-    const scope = scopeSchema.parse(r.scope);
-    if (canonicalJson(r.config.scope) !== canonicalJson(scope))
-      throw new Error("The captured scope no longer matches this campaign");
-    await appendEvent(c, r.id, event);
-    const events = (
-      await c.query("SELECT * FROM events WHERE run_id=$1 ORDER BY seq", [r.id])
-    ).rows;
-    await c.query("UPDATE runs SET verdict=$2 WHERE id=$1", [
-      r.id,
-      evaluate(events),
-    ]);
-  });
-  res.status(201).json({ accepted: true });
+// Legacy shared-token ingestion is retired in favor of per-run signed connectors.
+app.post("/api/runs/:id/evidence", (_req, res) => {
+  res
+    .status(410)
+    .json({ error: "Use the signed per-run backend-events connector" });
 });
-app.post("/api/integrations/bolna/check", async (_req, res) => {
+app.post("/api/runs/:id/reconcile", requireOwner, async (req, res) => {
+  const { providerExecutionId } = z
+    .object({ providerExecutionId: z.string().trim().min(1).max(200) })
+    .strict()
+    .parse(req.body);
+  const runId = routeId(req.params.id);
+  if (!(await db.query("SELECT id FROM runs WHERE id=$1", [runId])).rows.length)
+    return res.status(404).json({ error: "Run not found" });
+  await validateLiveReconciliation(runId, providerExecutionId);
+  await transaction((c) =>
+    reconcileLiveExecution(c, runId, providerExecutionId),
+  );
+  res.status(202).json({ status: "reconciliation_requested" });
+});
+app.post("/api/integrations/bolna/check", requireOwner, async (_req, res) => {
   const result = await new BolnaRuntime().checkConnection();
   res.json({
     connection: "reachable",
     ...result,
-    liveDispatchEnabled: false,
+    liveDispatchEnabled: liveReadiness().enabled,
     note: "Read-only connectivity check. No outbound call was made.",
   });
 });
@@ -403,6 +465,8 @@ function applicationFailure(error: unknown): ErrorResponse {
         .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
         .join("; "),
     };
+  if (error instanceof Error && "status" in error && error.status === 404)
+    return { status: 404, message: error.message };
   if (isDatabaseError(error))
     return { status: 500, message: "Database operation failed" };
   return {
@@ -418,20 +482,44 @@ app.use(
     _next: express.NextFunction,
   ) => {
     const failure = bodyParserFailure(error) ?? applicationFailure(error);
-    res.status(failure.status).json({ error: failure.message });
+    console.error(
+      JSON.stringify({
+        event: "request_failed",
+        requestId: res.locals.requestId,
+        status: failure.status,
+        category:
+          error instanceof z.ZodError
+            ? "validation"
+            : isDatabaseError(error)
+              ? "database"
+              : "application",
+      }),
+    );
+    res
+      .status(failure.status)
+      .json({ error: failure.message, requestId: res.locals.requestId });
   },
 );
-const host = process.env.HOST ?? "127.0.0.1";
-if (host !== "127.0.0.1" && host !== "localhost")
-  throw new Error(
-    "This development server has no multi-user authentication. Bind it to loopback.",
-  );
+await bootstrapAuth();
+const host = listenHost();
 const server = app.listen(Number(process.env.PORT ?? 4000), host, () =>
-  console.log(`Vouch API listening on ${host}:${process.env.PORT ?? 4000}`),
+  console.log(
+    JSON.stringify({
+      event: "api_started",
+      host,
+      port: Number(process.env.PORT ?? 4000),
+    }),
+  ),
 );
+let stopping = false;
 async function stop() {
-  server.close();
+  if (stopping) return;
+  stopping = true;
+  const deadline = setTimeout(() => server.closeAllConnections(), 10000);
+  deadline.unref();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  clearTimeout(deadline);
   await db.end();
 }
-process.on("SIGTERM", stop);
-process.on("SIGINT", stop);
+process.on("SIGTERM", () => void stop());
+process.on("SIGINT", () => void stop());

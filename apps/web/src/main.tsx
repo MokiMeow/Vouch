@@ -7,6 +7,7 @@ import { createRoot } from "react-dom/client";
 import { Credits, Landing } from "./components/Landing";
 import { Brand, Link } from "./components/Primitives";
 import { Workspace } from "./components/Workspace";
+import { AuthGate } from "./components/Auth";
 import { Docs } from "./components/Docs";
 import type { Navigate } from "./types";
 import "./style.css";
@@ -26,7 +27,19 @@ function Screen({ path, navigate }: { path: string; navigate: Navigate }) {
     /^\/app\/(campaigns|findings|targets|integrations)$/.test(path) ||
     /^\/app\/runs\/[a-f0-9-]+$/.test(path)
   )
-    return <Workspace path={path} navigate={navigate} />;
+    return (
+      <AuthGate navigate={navigate}>
+        {(session, onSessionChange) => (
+          <Workspace
+            key={session.workspace?.id ?? "local"}
+            path={path}
+            navigate={navigate}
+            session={session}
+            onSessionChange={onSessionChange}
+          />
+        )}
+      </AuthGate>
+    );
   return (
     <div className="not-found">
       <Brand navigate={navigate} />

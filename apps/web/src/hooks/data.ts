@@ -139,12 +139,17 @@ function usePolling(
   }, [enabled, interval, refresh]);
 }
 
-export function useOverview(onError: (message: string) => void) {
-  const resource = useApiData<Overview>("/overview", onError);
+export function useOverview(onError: (message: string) => void, offset = 0) {
+  const resource = useApiData<Overview>(
+    `/overview?limit=50&offset=${offset}`,
+    onError,
+  );
   const active =
-    resource.data?.runs.some(
-      (run) => run.status === "queued" || run.status === "running",
-    ) ?? true;
+    ((resource.data?.summary?.activeRuns ?? 0) > 0 ||
+      resource.data?.runs.some((run) =>
+        ["queued", "running", "awaiting_evidence"].includes(run.status),
+      )) ??
+    true;
   usePolling(resource.refresh, true, active ? 2500 : 30000);
   return { ...resource, refresh: resource.reload };
 }
@@ -153,7 +158,8 @@ export function useEvidence(path: string) {
   const runId = path.startsWith("/app/runs/") ? path.split("/")[3] : null;
   const resource = useApiData<Run>(runId ? `/runs/${runId}` : null);
   const active =
-    resource.data?.status === "queued" || resource.data?.status === "running";
+    !!resource.data &&
+    ["queued", "running", "awaiting_evidence"].includes(resource.data.status);
   usePolling(resource.refresh, active, 1500);
   return {
     run: resource.data,

@@ -54,7 +54,8 @@ export function FindingReview({
       setBusy(false);
     }
   }
-  const invalid = busy || note.trim().length < 3;
+  const reviewable = ["completed", "failed", "cancelled"].includes(run.status);
+  const invalid = busy || !reviewable || note.trim().length < 3;
   return (
     <section className="review-section">
       <div className="section-heading">
@@ -63,7 +64,7 @@ export function FindingReview({
           {label(run.review)}
         </Badge>
       </div>
-      {run.verdict?.outcome === "violation" ? (
+      {run.verdict?.outcome === "violation" && reviewable ? (
         <>
           <p>Review the evidence, then leave a decision and a rationale.</p>
           <label htmlFor="review-note" className="field-label">
@@ -102,7 +103,9 @@ export function FindingReview({
       ) : (
         <p className="inline-help">
           <ShieldCheckIcon size={20} />
-          Only candidate violations need a finding decision.
+          {run.verdict?.outcome === "violation"
+            ? "Review opens when the run and evidence collection have finished."
+            : "Only candidate violations need a finding decision."}
         </p>
       )}
     </section>

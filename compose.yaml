@@ -1,0 +1,110 @@
+name: vouch
+x-runtime: &runtime
+  build: .
+  image: vouch:local
+  init: true
+  env_file:
+    - path: ${VOUCH_COMPOSE_ENV:-.env.production}
+      required: true
+  environment: &runtime-environment
+    NODE_ENV: production
+    HOST: 0.0.0.0
+    PORT: 4000
+    VOUCH_AUTH_MODE: session
+    VOUCH_COOKIE_SECURE: "true"
+    VOUCH_ARTIFACT_DIR: /var/lib/vouch/artifacts
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m,uid=1000,gid=1000,mode=1770
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 128
+  stop_grace_period: 90s
+  volumes:
+    - evidence:/var/lib/vouch/artifacts
+  networks:
+    - backend
+
+services:
+  database:
+    image: ${POSTGRES_IMAGE:-postgres:17.7-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in the production environment file}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in the production environment file}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - database:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    stop_grace_period: 60s
+
+  migrate:
+    <<: *runtime
+    command: ["node", "dist/server/apps/api/src/migrate.js"]
+    restart: "no"
+    healthcheck:
+      disable: true
+    depends_on:
+      database:
+        condition: service_healthy
+
+  api:
+    <<: *runtime
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${VOUCH_HTTP_PORT:-4000}:4000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *runtime
+    command: ["node", "dist/server/apps/api/src/worker.js"]
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "dist/server/apps/api/src/operations.js",
+          "worker-health",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  maintenance:
+    <<: *runtime
+    profiles: ["operations"]
+    command: ["node", "dist/server/scripts/maintenance.js", "--dry-run"]
+    restart: "no"
+    healthcheck:
+      disable: true
+    depends_on:
+      database:
+        condition: service_healthy
+
+secrets:
+  postgres_password:
+    file: ${VOUCH_POSTGRES_PASSWORD_FILE:-.data/secrets/postgres_password}
+
+volumes:
+  database:
+  evidence:
+
+networks:
+  backend:

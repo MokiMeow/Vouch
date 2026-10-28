@@ -7,6 +7,7 @@ pnpm install --frozen-lockfile --store-dir /workspace/.pnpm-store
 if [[ ! -e .env ]]; then
   (umask 077; cp .env.example .env)
 fi
+pnpm setup:secrets
 bash scripts/db-start.sh
 pnpm db:migrate
 pnpm build
