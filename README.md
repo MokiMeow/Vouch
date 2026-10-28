@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="#quickstart">Quickstart</a> ·
-  <a href="docs/application-flow.md">Architecture</a> ·
+  <a href="docs/architecture/application-flow.md">Architecture</a> ·
   <a href="docs/project-status.md">Project status</a> ·
   <a href="#contributing">Contributing</a> ·
   <a href="LICENSE">MIT license</a>
@@ -64,7 +64,7 @@ Keep an existing `.env` when repeating setup. Fixtures require no provider crede
 
 Open `http://127.0.0.1:5173` for the landing page, `/app` for the workspace and `/docs` for documentation. The development command starts Vite, the API and the worker together. PostgreSQL uses loopback port 54329 and the API uses port 4000 by default. The API health endpoint is `/api/health`.
 
-For this managed cloud checkout, use `bash scripts/cloud-install.sh` to install, start the database, migrate and build with writable cache paths. It preserves existing configuration. Then start `pnpm dev`. See the [cloud startup guide](docs/cloud-start.md) for separate process startup and readiness checks.
+For this managed cloud checkout, use `bash scripts/cloud-install.sh` to install, start the database, migrate and build with writable cache paths. It preserves existing configuration. Then start `pnpm dev`. See the [cloud startup guide](docs/operations/cloud-start.md) for separate process startup and readiness checks.
 
 ### Configuration
 
@@ -77,7 +77,7 @@ For this managed cloud checkout, use `bash scripts/cloud-install.sh` to install,
 | `AUTHORIZED_PHONE_NUMBERS`   | Exact operator-approved E.164 target allowlist                         | No                  |
 | `VOUCH_EVIDENCE_SIGNING_KEY` | Server master key for separate per-run backend and provider signatures | No                  |
 
-Use [`.env.example`](.env.example) as the reference. `.env` is ignored by Git. Never put secrets in browser variables, source files, screenshots or commits. Live activation additionally requires Twilio controls, approved targets, a matching fictional `VOUCH_SYNTHETIC_CHALLENGE`, recording hosts and confirmed billing settings. Use the [live setup guide](docs/bolna.md) and [full configuration example](.env.example). Production uses [`.env.production.example`](.env.production.example) and the [deployment guide](docs/deployment.md).
+Use [`.env.example`](.env.example) as the reference. `.env` is ignored by Git. Never put secrets in browser variables, source files, screenshots or commits. Live activation additionally requires Twilio controls, approved targets, a matching fictional `VOUCH_SYNTHETIC_CHALLENGE`, recording hosts and confirmed billing settings. Use the [live setup guide](docs/guides/bolna.md) and [full configuration example](.env.example). Production uses [`.env.production.example`](.env.production.example) and the [deployment guide](docs/operations/deployment.md).
 
 ### Run your first campaign
 
@@ -117,9 +117,9 @@ flowchart TD
 
 The API validates input and captures immutable scope and configuration. The worker takes jobs from PostgreSQL with a global concurrency lock. The fixture emits explicitly synthetic conversation events while its instrumented tool changes a fictional account in the real database. Pure policy functions grade the recorded evidence. Review decisions are appended separately from verdicts.
 
-New configuration hashes use `sha256-sorted-json-v1` so they survive JSONB key ordering. Reruns preserve the captured configuration, consume another call slot and recheck scope. External backend evidence uses separate per-run HMAC credentials, ordered batches and an explicit complete-log marker. The [TypeScript connector SDK](packages/connector/src/index.ts) and [SQL outbox integration guide](docs/connector-sdk.md) provide the customer-side contract. Provider speech cannot supply trusted backend facts.
+New configuration hashes use `sha256-sorted-json-v1` so they survive JSONB key ordering. Reruns preserve the captured configuration, consume another call slot and recheck scope. External backend evidence uses separate per-run HMAC credentials, ordered batches and an explicit complete-log marker. The [TypeScript connector SDK](packages/connector/src/index.ts) and [SQL outbox integration guide](docs/guides/connector-sdk.md) provide the customer-side contract. Provider speech cannot supply trusted backend facts.
 
-Read the [component map and full workflow](docs/application-flow.md) for implementation boundaries.
+Read the [component map and full workflow](docs/architecture/application-flow.md) for implementation boundaries.
 
 ## Tech stack
 
@@ -142,14 +142,25 @@ Exact dependency versions are pinned in [`package.json`](package.json) and [`pnp
 ## Repository map
 
 ```text
-apps/web/          Landing page, workspace and public documentation
-apps/api/          HTTP API, worker, provider boundary and database migrations
-packages/core/    Policy, event schemas, evidence grading and scope rules
-packages/connector/ Signed customer-backend evidence SDK
-scripts/          Local setup and browser verification
-docs/             Architecture, acceptance, integration and engineering guides
-AGENTS.md         Repository instructions for coding agents
+apps/api/src/
+  server.ts, worker.ts, migrate.ts   Stable executable entry points
+  auth/, database/, campaigns/      Access, persistence and configuration
+  execution/, providers/bolna/      Job orchestration and provider adapters
+  evidence/, http/, operations/     Ingestion, transport and maintenance
+apps/web/src/
+  pages/                            Landing and public documentation
+  features/                         Auth, workspace, campaigns, evidence and findings
+  shared/                           Types, request helpers, hooks and UI primitives
+  styles/                           Base styles, tokens and feature styles
+packages/core/                      Domain policy, evaluation and unit checks
+packages/connector/                 Signed customer-backend evidence SDK
+scripts/                            Stable setup, build and operation commands
+  verification/                     Browser runners and coverage reporting
+docs/                               Guides, architecture, operations, reports and history
+AGENTS.md                           Coding-agent instructions and placement rules
 ```
+
+See the [documentation index](docs/README.md) for the guide map and contribution placement rules.
 
 ## Verification
 
@@ -172,9 +183,9 @@ Existing test harnesses reflect the earlier fixture API and may need session, si
 
 ## Live setup and deployment
 
-Start with [Bolna setup](docs/bolna.md), then read the [provider contract](docs/provider-contract.md), [durable orchestration](docs/live-orchestration.md) and [signed evidence connector](docs/evidence-connector.md). The first live transport is PSTN with a Twilio-backed Bolna caller. SIP, WebSocket/WebRTC and other runtimes remain optional future extensions.
+Start with [Bolna setup](docs/guides/bolna.md), then read the [provider contract](docs/architecture/provider-contract.md), [durable orchestration](docs/architecture/live-orchestration.md) and [signed evidence connector](docs/guides/evidence-connector.md). The first live transport is PSTN with a Twilio-backed Bolna caller. SIP, WebSocket/WebRTC and other runtimes remain optional future extensions.
 
-The [deployment guide](docs/deployment.md) covers Docker Compose, owner bootstrap, HTTPS, health checks, retention, backups and guarded restoration. Production requires session authentication and an exact HTTPS `PUBLIC_ORIGIN`. Local mode is restricted to nonproduction loopback use.
+The [deployment guide](docs/operations/deployment.md) covers Docker Compose, owner bootstrap, HTTPS, health checks, retention, backups and guarded restoration. Production requires session authentication and an exact HTTPS `PUBLIC_ORIGIN`. Local mode is restricted to nonproduction loopback use.
 
 ```sh
 # Build web and native Node server outputs
@@ -203,7 +214,7 @@ The HTTP server exposes approved pages and assets. Raw repository documents, aud
 
 ## Contributing
 
-Read [`AGENTS.md`](AGENTS.md), the [domain glossary](docs/domain-glossary.md) and the [original brief](docs/product-brief.md) before changing behavior. Keep provider contracts narrow, preserve evidence provenance and label synthetic data. Reproduce behavioral bugs with a meaningful failing test, then run checks appropriate to the change.
+Read [`AGENTS.md`](AGENTS.md), the [domain glossary](docs/architecture/domain-glossary.md) and the [original brief](docs/reference/product-brief.md) before changing behavior. Keep provider contracts narrow, preserve evidence provenance and label synthetic data. Reproduce behavioral bugs with a meaningful failing test, then run checks appropriate to the change.
 
 For an issue or pull request, explain the user-visible problem, the change and its validation. Never include real credentials, private account data or recordings without authorization. Keep source and creator notices when adapting third-party work.
 
@@ -211,4 +222,4 @@ For an issue or pull request, explain the user-visible problem, the change and i
 
 Vouch's project code and original assets are available under the [MIT license](LICENSE).
 
-Third-party assets retain their own licenses. [Phosphor icons](apps/web/public/licenses/phosphor-MIT.txt) and [OpenCode token references](apps/web/public/licenses/opencode-MIT.txt) use MIT. [Geist](apps/web/public/licenses/geist-OFL.txt) and [Geist Mono](apps/web/public/licenses/geist-mono-OFL.txt) use the SIL Open Font License. See the [design sources and credits](docs/design-redesign.md) for attribution and the scope of the references.
+Third-party assets retain their own licenses. [Phosphor icons](apps/web/public/licenses/phosphor-MIT.txt) and [OpenCode token references](apps/web/public/licenses/opencode-MIT.txt) use MIT. [Geist](apps/web/public/licenses/geist-OFL.txt) and [Geist Mono](apps/web/public/licenses/geist-mono-OFL.txt) use the SIL Open Font License. See the [design sources and credits](docs/reports/design-redesign.md) for attribution and the scope of the references.

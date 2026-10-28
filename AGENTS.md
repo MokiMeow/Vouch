@@ -6,29 +6,34 @@ This file applies to the entire repository. Read any more specific instructions 
 
 Vouch tests whether an authorized voice agent can be persuaded to skip a business-policy check. Findings must connect conversation to realized tool activity and backend evidence.
 
-The implementation includes a local synthetic fixture and a gated Twilio-backed Bolna PSTN workflow, with session authentication and PostgreSQL tenant isolation. Live dispatch is off by default and the expansion has not received acceptance tests. Do not describe implemented code as a verified provider integration or a production-certified service. See [project status](docs/project-status.md), [acceptance](docs/acceptance.md) and the [original brief](docs/product-brief.md).
+The implementation includes a local synthetic fixture and a gated Twilio-backed Bolna PSTN workflow, with session authentication and PostgreSQL tenant isolation. Live dispatch is off by default and the expansion has not received acceptance tests. Do not describe implemented code as a verified provider integration or a production-certified service. See [project status](docs/project-status.md), [acceptance](docs/guides/acceptance.md) and the [original brief](docs/reference/product-brief.md).
 
 ## Code map
 
 - `apps/web/src/main.tsx` owns SPA route selection.
-- `apps/web/src/components/` contains the landing page, workspace, campaign form, findings, evidence views and public Docs.
-- `apps/web/src/hooks/data.ts` owns request cancellation, retries, polling and stale-response protection.
-- `apps/web/src/mission-tokens.css` and page CSS files define the visual system.
+- `apps/web/src/pages/` contains the public landing and Docs pages.
+- `apps/web/src/features/` groups auth, workspace, campaign, evidence and finding UI by feature.
+- `apps/web/src/shared/` owns shared types, request helpers, hooks and UI primitives.
+- `apps/web/src/styles/` holds the base styles, current design tokens and feature styles in their existing cascade order.
+- `apps/web/src/shared/hooks/data.ts` owns request cancellation, retries, polling and stale-response protection.
+- `apps/web/src/styles/tokens.css` and page CSS files define the visual system.
 - `apps/api/src/server.ts` owns HTTP validation, campaigns, reviews, reruns, exports and authenticated evidence ingestion.
 - `apps/api/src/worker.ts` processes the queue with concurrency and scope enforcement.
-- `apps/api/src/fixture.ts` executes synthetic cases and records actual fictional-account changes.
-- `apps/api/src/configuration.ts` owns captured configuration digests and integrity checks.
-- `apps/api/src/bolna.ts`, `bolna-model.ts` and `bolna-telephony.ts` define provider contracts, captured caller configuration and Twilio control.
-- `apps/api/src/live.ts` owns durable submission, budget, cancellation, reconciliation and isolated-caller cleanup.
-- `apps/api/src/auth.ts` and `db.ts` own sessions, CSRF, workspace context and restricted-role RLS.
-- `apps/api/src/evidence.ts` and `artifacts.ts` own signed ingestion, encrypted audio, provenance-preserving privacy and artifact recovery.
-- `apps/api/src/retention.ts` and `operations.ts` own bounded maintenance and safe operational signals.
-- `apps/api/src/public-site.ts` controls public HTTP pages and assets.
+- `apps/api/src/execution/fixture.ts` executes synthetic cases and records actual fictional-account changes.
+- `apps/api/src/campaigns/configuration.ts` owns captured configuration digests and integrity checks.
+- `apps/api/src/providers/bolna/` define provider contracts, captured caller configuration and Twilio control.
+- `apps/api/src/execution/live.ts` owns durable submission, budget, cancellation, reconciliation and isolated-caller cleanup.
+- `apps/api/src/auth/service.ts` and `apps/api/src/database/client.ts` own sessions, CSRF, workspace context and restricted-role RLS.
+- `apps/api/src/evidence/ingestion.ts` and `apps/api/src/evidence/artifacts.ts` own signed ingestion, encrypted audio, provenance-preserving privacy and artifact recovery.
+- `apps/api/src/operations/retention.ts` and `apps/api/src/operations/health.ts` own bounded maintenance and safe operational signals.
+- `apps/api/src/http/public-site.ts` controls public HTTP pages and assets.
 - `apps/api/src/migrate.ts` owns repeatable SQL schema setup.
 - `packages/core/src/` owns strict schemas, limits, policies and pure deterministic evaluation.
 - `packages/connector/src/` provides customer-side backend evidence signing and delivery.
-- `scripts/` contains setup, production compilation, maintenance, backup/restore and browser verification.
-- `Dockerfile`, `compose.yaml` and `docs/deployment.md` describe the native production services.
+- `scripts/` contains setup, production compilation, maintenance and backup/restore entry points. Browser verification and coverage tools live in `scripts/verification/`.
+- `packages/core/test/` holds domain unit checks next to the package. API/adapter checks stay in `apps/api/test/`.
+- `docs/README.md` indexes guides, architecture, operations, reports and history. Keep historical records in their designated folders.
+- `Dockerfile`, `compose.yaml` and `docs/operations/deployment.md` describe the native production services.
 
 ## Setup
 
@@ -44,7 +49,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-The cloud-specific install command is `bash scripts/cloud-install.sh`. Read [cloud startup](docs/cloud-start.md) before starting managed services. Check for existing listeners before creating duplicate processes. Do not reset retained `.data/postgres/` to resolve a routine setup problem.
+The cloud-specific install command is `bash scripts/cloud-install.sh`. Read [cloud startup](docs/operations/cloud-start.md) before starting managed services. Check for existing listeners before creating duplicate processes. Do not reset retained `.data/postgres/` to resolve a routine setup problem.
 
 ## Invariants to preserve
 
@@ -95,4 +100,10 @@ The live/auth expansion was delivered without running test suites by explicit us
 
 Run checks relevant to the change. Integration tests reset only a dedicated database ending in `_test`; never point them at retained development or customer data. Browser suites create synthetic development records. `CHROMIUM_PATH` defaults to `/usr/bin/chromium`. Test output and coverage stay ignored unless a reviewed documentation asset is deliberately copied into `docs/assets/`.
 
-Record material changes and validation in [the action log](docs/action-log.md). Update acceptance and status when capabilities change. State what was actually verified and remaining limitations. Keep commits focused and preserve unrelated user work.
+Record material changes and validation in [the action log](docs/history/action-log.md). Update acceptance and status when capabilities change. State what was actually verified and remaining limitations. Keep commits focused and preserve unrelated user work.
+
+## Placement rules
+
+Add API modules to the owning feature directory and keep only executable server, worker and migration entry points at `apps/api/src/` root. Keep provider details inside `providers/<provider>/`. Add frontend behavior under `features/<feature>/`, public pages under `pages/`, and reusable infrastructure under `shared/`. Avoid version suffixes and duplicate replacement files. Keep code next to its feature rather than creating miscellaneous helper folders.
+
+Keep user setup and integration instructions in `docs/guides/`, system contracts in `docs/architecture/`, operational runbooks in `docs/operations/`, and dated audit material in `docs/reports/`. Preserve the supplied brief byte-for-byte under `docs/reference/`. Generated captures, coverage, build output, package caches, credentials and database contents remain ignored and are never documentation source by default.

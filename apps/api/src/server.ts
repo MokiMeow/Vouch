@@ -10,33 +10,33 @@ import {
   scopeSchema,
   targetSchema,
 } from "../../../packages/core/src/index";
-import { BolnaRuntime } from "./bolna";
-import { db, transaction, withSystemDatabase } from "./db";
+import { BolnaRuntime } from "./providers/bolna/runtime";
+import { db, transaction, withSystemDatabase } from "./database/client";
 import {
   CONFIG_HASH_ALGORITHM,
   assertConfigurationHash,
   canonicalJson,
   configurationHash,
   configurationIntegrity,
-} from "./configuration";
-import { publicSite } from "./public-site";
+} from "./campaigns/configuration";
+import { publicSite } from "./http/public-site";
 import {
   authRouter,
   bootstrapAuth,
   requireWorkspace,
   requireOwner,
-} from "./auth";
-import { installHttpSecurity, listenHost } from "./http-security";
+} from "./auth/service";
+import { installHttpSecurity, listenHost } from "./http/security";
 import {
   captureLiveConfiguration,
   liveReadiness,
   requestLiveCancellation,
   reconcileLiveExecution,
   validateLiveReconciliation,
-} from "./live";
-import { evidenceRouter, signedEvidenceRouter } from "./evidence";
-import { listRunArtifacts } from "./artifacts";
-import type { LiveTarget } from "./live";
+} from "./execution/live";
+import { evidenceRouter, signedEvidenceRouter } from "./evidence/ingestion";
+import { listRunArtifacts } from "./evidence/artifacts";
+import type { LiveTarget } from "./execution/live";
 const app = express();
 installHttpSecurity(app);
 app.use(express.json({ limit: "512kb" }));

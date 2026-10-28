@@ -6,7 +6,7 @@ import {
   canonicalJson,
   configurationHash,
   configurationIntegrity,
-} from "../src/configuration";
+} from "../src/campaigns/configuration";
 
 describe("configuration provenance", () => {
   it("uses the documented UTF-16 key order rather than locale-dependent sorting", () => {

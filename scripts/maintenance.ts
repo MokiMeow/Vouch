@@ -1,9 +1,9 @@
 import "dotenv/config";
-import { db, withSystemDatabase } from "../apps/api/src/db";
-import { purgeExpiredArtifacts } from "../apps/api/src/artifacts";
-import { purgeExpiredSessions } from "../apps/api/src/auth";
-import { purgeClosedCampaigns } from "../apps/api/src/retention";
-import { operationLog } from "../apps/api/src/operations";
+import { db, withSystemDatabase } from "../apps/api/src/database/client";
+import { purgeExpiredArtifacts } from "../apps/api/src/evidence/artifacts";
+import { purgeExpiredSessions } from "../apps/api/src/auth/service";
+import { purgeClosedCampaigns } from "../apps/api/src/operations/retention";
+import { operationLog } from "../apps/api/src/operations/health";
 
 const arguments_ = new Set(process.argv.slice(2));
 if ([...arguments_].some((item) => !["--dry-run", "--apply"].includes(item)))

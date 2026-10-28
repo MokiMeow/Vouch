@@ -1,6 +1,6 @@
 import { MockAgent } from "undici";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { BolnaRuntime } from "../src/bolna";
+import { BolnaRuntime } from "../src/providers/bolna/runtime";
 let mock: MockAgent;
 beforeEach(() => {
   mock = new MockAgent();

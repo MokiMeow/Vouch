@@ -24,5 +24,5 @@ USER node
 EXPOSE 4000
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD ["node", "dist/server/apps/api/src/operations.js", "api-health"]
+  CMD ["node", "dist/server/apps/api/src/operations/health.js", "api-health"]
 CMD ["node", "dist/server/apps/api/src/server.js"]

@@ -1,7 +1,7 @@
-import { db, transaction, withSystemDatabase } from "./db";
-import { migrateLive } from "./live";
-import { migrateEvidence } from "./evidence";
-import { migrateAuth } from "./auth";
+import { db, transaction, withSystemDatabase } from "./database/client";
+import { migrateLive } from "./execution/live";
+import { migrateEvidence } from "./evidence/ingestion";
+import { migrateAuth } from "./auth/service";
 export async function migrate() {
   await withSystemDatabase(() =>
     transaction(async (c) => {

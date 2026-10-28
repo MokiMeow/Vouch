@@ -1,6 +1,6 @@
 # Vouch implementation and acceptance handoff
 
-Updated on October 28, 2026 against the [original brief](product-brief.md).
+Updated on October 28, 2026 against the [original brief](reference/product-brief.md).
 
 ## Implementation status
 
@@ -25,7 +25,7 @@ Additional runtime providers and SIP/WebSocket/WebRTC transports are optional ex
 
 ## Configuration the operator supplies
 
-Use [Bolna setup](bolna.md), [the provider contract](provider-contract.md), [live orchestration](live-orchestration.md) and [deployment](deployment.md).
+Use [Bolna setup](guides/bolna.md), [the provider contract](architecture/provider-contract.md), [live orchestration](architecture/live-orchestration.md) and [deployment](operations/deployment.md).
 
 - A supported Bolna caller template and credentials for its Twilio account
 - The exact authorized E.164 target allowlist and authorization reference
@@ -33,7 +33,7 @@ Use [Bolna setup](bolna.md), [the provider contract](provider-contract.md), [liv
 - Correct cost units/currency, finalization semantics and a conservative all-inclusive rate ceiling
 - Exact approved recording hostnames and server-side signing/encryption keys
 - For production, database credentials, an HTTPS origin and initial workspace owner credentials
-- Customer-side instrumentation using the [connector SDK](connector-sdk.md), keeping backend signing keys away from the target LLM
+- Customer-side instrumentation using the [connector SDK](guides/connector-sdk.md), keeping backend signing keys away from the target LLM
 
 The ignored local environment retains the existing provider credential. Missing signing and artifact-encryption keys were generated privately without printing values or replacing existing keys. Live dispatch remains disabled unless an operator explicitly configures and enables it.
 
@@ -51,4 +51,4 @@ The combined web/native server production build completed successfully, includin
 
 Existing test harnesses target the earlier fixture API. Their authorization, signed evidence and isolated database setup must be reviewed alongside the new acceptance cases by the team performing testing. Those older results must not be reused as release approval for this implementation.
 
-The [action log](action-log.md) records the implementation and actual build/migration outcomes. The [application flow](application-flow.md) maps components. Release approval depends on the operator's testing and deployment checks.
+The [action log](history/action-log.md) records the implementation and actual build/migration outcomes. The [application flow](architecture/application-flow.md) maps components. Release approval depends on the operator's testing and deployment checks.

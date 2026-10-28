@@ -30,7 +30,7 @@ if (
   await admin.query(`CREATE DATABASE ${dbName}`);
 }
 await admin.end();
-const { db } = await import("../src/db");
+const { db } = await import("../src/database/client");
 const { migrate } = await import("../src/migrate");
 const { tick } = await import("../src/worker");
 await migrate();
@@ -107,8 +107,8 @@ async function checkPublicBoundary() {
     await writeFile(`dist/web/${file}`, "PRIVATE TEST CANARY");
   try {
     for (const path of [
-      "/docs/product-brief.md",
-      "/docs/action-log.md",
+      "/docs/reference/product-brief.md",
+      "/docs/history/action-log.md",
       "/artifacts/audit/crap-report.txt",
       "/.git/config",
       "/%2eenv",

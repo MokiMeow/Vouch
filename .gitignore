@@ -10,3 +10,10 @@ artifacts/
 coverage/
 .metrics/
 target/
+
+# Operating system and generated compiler/editor leftovers
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+*.tmp
+*.bak

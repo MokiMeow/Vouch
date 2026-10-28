@@ -76,7 +76,7 @@ services:
         [
           "CMD",
           "node",
-          "dist/server/apps/api/src/operations.js",
+          "dist/server/apps/api/src/operations/health.js",
           "worker-health",
         ]
       interval: 30s

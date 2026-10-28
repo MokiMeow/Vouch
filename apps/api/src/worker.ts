@@ -7,19 +7,19 @@ import {
   type Scope,
   type Verdict,
 } from "../../../packages/core/src/index";
-import { db, withSystemDatabase } from "./db";
+import { db, withSystemDatabase } from "./database/client";
 import {
   advanceLive,
   cleanupProvisionedCallers,
   liveTransaction,
-} from "./live";
-import { workerHeartbeat } from "./operations";
-import { executeFixture } from "./fixture";
+} from "./execution/live";
+import { workerHeartbeat } from "./operations/health";
+import { executeFixture } from "./execution/fixture";
 import {
   assertConfigurationHash,
   canonicalJson,
   currentPolicySchema,
-} from "./configuration";
+} from "./campaigns/configuration";
 type Job = {
   id: string;
   campaign_id: string;
