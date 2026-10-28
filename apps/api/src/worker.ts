@@ -1,0 +1,155 @@
+import type { PoolClient } from "pg";
+import { z } from "zod";
+import {
+  assertScope,
+  policy,
+  scenarios,
+  scopeSchema,
+  type Scope,
+  type Verdict,
+} from "../../../packages/core/src/index";
+import { db, transaction } from "./db";
+import { executeFixture } from "./fixture";
+type Job = {
+  id: string;
+  campaign_id: string;
+  scenario: string;
+  synthetic: boolean;
+  scope: Scope;
+  config: unknown;
+  campaign_status: string;
+};
+const configSchema = z.object({
+  mode: z.literal("fixture"),
+  policy: z.object({
+    id: z.literal(policy.id),
+    version: z.literal(policy.version),
+    tool: z.literal(policy.tool),
+    precondition: z.literal(policy.precondition),
+    forbiddenOutcome: z.literal(policy.forbiddenOutcome),
+  }),
+  runtime: z.object({
+    provider: z.literal("vouch-fixture"),
+    apiFlavor: z.literal("fixture-v1"),
+    model: z.literal(scenarios.false_authority.model),
+  }),
+  scenarios: z.record(z.string(), z.record(z.string(), z.unknown())),
+});
+function isScenario(name: string): name is keyof typeof scenarios {
+  return Object.hasOwn(scenarios, name);
+}
+function validateConfiguration(job: Job) {
+  if (!isScenario(job.scenario))
+    throw new Error("The captured scenario is not supported by this runtime");
+  const parsed = configSchema.safeParse(job.config);
+  if (!parsed.success)
+    throw new Error(
+      "The captured fixture configuration is incompatible with this runtime",
+    );
+  const captured = parsed.data.scenarios[job.scenario];
+  if (!captured) throw new Error("The captured scenario is missing");
+  if (
+    Object.entries(scenarios[job.scenario]).some(
+      ([key, value]) => captured[key] !== value,
+    )
+  )
+    throw new Error(
+      "The captured scenario has changed; a new authorized campaign is required",
+    );
+}
+async function finishCampaign(c: PoolClient, job: Job, verdict: Verdict) {
+  if (verdict.outcome === "violation" && job.scope.stopOnFinding) {
+    await c.query("UPDATE campaigns SET status='stopped' WHERE id=$1", [
+      job.campaign_id,
+    ]);
+    await c.query(
+      "UPDATE runs SET status='cancelled',finished_at=now() WHERE campaign_id=$1 AND status='queued'",
+      [job.campaign_id],
+    );
+    return;
+  }
+  await c.query(
+    "UPDATE campaigns SET status=CASE WHEN EXISTS(SELECT 1 FROM runs WHERE campaign_id=$1 AND status='failed') THEN 'failed' WHEN EXISTS(SELECT 1 FROM runs WHERE campaign_id=$1 AND status='queued') THEN 'running' ELSE 'completed' END WHERE id=$1",
+    [job.campaign_id],
+  );
+}
+async function processJob(c: PoolClient, job: Job) {
+  // Roll back a failed call before writing its failure record. SQL errors otherwise
+  // leave PostgreSQL in an aborted transaction, causing the same job to retry forever.
+  await c.query("SAVEPOINT call_execution");
+  try {
+    const scope = scopeSchema.parse(job.scope);
+    assertScope(scope, Date.now(), 0);
+    if (!job.synthetic)
+      throw new Error(
+        "Live calls blocked: hard duration, cost reservation and cancellation capabilities are not verified",
+      );
+    validateConfiguration(job);
+    await c.query(
+      "UPDATE runs SET status='running',started_at=now() WHERE id=$1",
+      [job.id],
+    );
+    const verdict = await executeFixture(c, job);
+    await c.query(
+      "UPDATE runs SET status='completed',verdict=$2,finished_at=now() WHERE id=$1",
+      [job.id, verdict],
+    );
+    await finishCampaign(c, job, verdict);
+    await c.query("RELEASE SAVEPOINT call_execution");
+  } catch (error) {
+    await c.query("ROLLBACK TO SAVEPOINT call_execution");
+    await c.query("RELEASE SAVEPOINT call_execution");
+    await c.query(
+      "UPDATE runs SET status='failed',error=$2,finished_at=now() WHERE id=$1",
+      [job.id, error instanceof Error ? error.message : "Worker failed"],
+    );
+    await c.query("UPDATE campaigns SET status='failed' WHERE id=$1", [
+      job.campaign_id,
+    ]);
+  }
+}
+export async function tick() {
+  return transaction(async (c) => {
+    // The vertical slice deliberately supports one call globally across all workers.
+    if (
+      !(await c.query("SELECT pg_try_advisory_xact_lock(864209) AS locked"))
+        .rows[0].locked
+    )
+      return false;
+    const { rows } = await c.query<Job>(
+      `SELECT r.*,c.scope,c.status AS campaign_status FROM runs r JOIN campaigns c ON c.id=r.campaign_id WHERE r.status='queued' AND (c.scope->>'startsAt')::timestamptz<=now() ORDER BY r.created_at,r.scenario LIMIT 1 FOR UPDATE OF r,c SKIP LOCKED`,
+    );
+    const job = rows[0];
+    if (!job) return false;
+    if (job.campaign_status === "stopped") {
+      await c.query(
+        "UPDATE runs SET status='cancelled',finished_at=now() WHERE id=$1",
+        [job.id],
+      );
+      return true;
+    }
+    await processJob(c, job);
+    return true;
+  });
+}
+if (import.meta.url === new URL(process.argv[1], "file:").href) {
+  console.log("Vouch worker ready (PostgreSQL queue, concurrency 1)");
+  let stopping = false;
+  const stop = () => {
+    stopping = true;
+  };
+  process.on("SIGTERM", stop);
+  process.on("SIGINT", stop);
+  while (!stopping) {
+    try {
+      await tick();
+    } catch (error) {
+      console.error(
+        "Worker database operation failed",
+        error instanceof Error ? error.message : "unknown",
+      );
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  await db.end();
+}
