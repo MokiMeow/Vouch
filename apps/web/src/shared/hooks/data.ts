@@ -7,7 +7,7 @@ import {
   type SetStateAction,
 } from "react";
 import { api } from "../lib";
-import type { Overview, Run } from "../types";
+import type { Overview, Run, FindingsPage } from "../types";
 
 type Snapshot<T> = { key: string | null; data: T | null; error: string };
 type PendingRequest = { controller: AbortController; promise: Promise<void> };
@@ -139,7 +139,7 @@ function usePolling(
   }, [enabled, interval, refresh]);
 }
 
-export function useOverview(onError: (message: string) => void, offset = 0) {
+export function useOverview(onError?: (message: string) => void, offset = 0) {
   const resource = useApiData<Overview>(
     `/overview?limit=50&offset=${offset}`,
     onError,
@@ -167,4 +167,16 @@ export function useEvidence(path: string) {
     error: resource.error,
     refresh: resource.reload,
   };
+}
+
+export function useFindings(search: string, outcome: string, page: number) {
+  const query = new URLSearchParams({
+    search: search.trim(),
+    outcome,
+    limit: "50",
+    offset: String((page - 1) * 50),
+  });
+  const resource = useApiData<FindingsPage>(`/findings?${query}`);
+  usePolling(resource.refresh, true, 10000);
+  return { ...resource, refresh: resource.reload };
 }

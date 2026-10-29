@@ -51,16 +51,7 @@ function artifactPath(id: string) {
     throw new Error("Invalid artifact identifier");
   return resolve(directory(), `${id}.bin`);
 }
-export async function migrateArtifacts(c: Queryable) {
-  await c.query(`CREATE TABLE IF NOT EXISTS artifacts(
-    id uuid PRIMARY KEY, run_id uuid NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    kind text NOT NULL CHECK(kind='recording'), content_type text NOT NULL,
-    byte_length integer NOT NULL CHECK(byte_length>0), sha256 text NOT NULL,
-    iv text NOT NULL, auth_tag text NOT NULL, provider_execution_id text NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz NOT NULL,
-    redacted_at timestamptz, UNIQUE(run_id,provider_execution_id,kind));
-    CREATE INDEX IF NOT EXISTS artifact_retention ON artifacts(expires_at);`);
-}
+
 export async function listArtifacts(runId: string) {
   const { rows } = await db.query(
     "SELECT id,kind,content_type,byte_length,created_at,expires_at FROM artifacts WHERE run_id=$1 AND redacted_at IS NULL AND expires_at>now() ORDER BY created_at",
@@ -231,28 +222,60 @@ export async function archiveRecording(
   try {
     await writeFile(temporary, encrypted, { mode: 0o600, flag: "wx" });
     await rename(temporary, artifactPath(id));
-    if (expiresAt.getTime() <= Date.now())
-      throw new Error("The recording retention window has expired");
-    await db.query(
-      "INSERT INTO artifacts(id,run_id,kind,content_type,byte_length,sha256,iv,auth_tag,provider_execution_id,expires_at) VALUES($1,$2,'recording',$3,$4,$5,$6,$7,$8,$9)",
-      [
-        id,
-        runId,
-        contentType,
-        data.length,
-        createHash("sha256").update(data).digest("hex"),
-        iv.toString("base64"),
-        tag.toString("base64"),
-        providerExecutionId,
-        expiresAt,
-      ],
-    );
+    const published = await transaction(async (c) => {
+      // Discard and retention use this same run lock. A download that began
+      // before an owner discarded missing audio must not recreate it later.
+      const current = (
+        await c.query(
+          "SELECT id,finished_at FROM runs WHERE id=$1 FOR UPDATE",
+          [runId],
+        )
+      ).rows[0];
+      if (!current) return null;
+      const privacy = (
+        await c.query(
+          "SELECT recording_redacted FROM provider_evidence_cursors WHERE run_id=$1",
+          [runId],
+        )
+      ).rows[0];
+      if (privacy?.recording_redacted) return null;
+      const prior = (
+        await c.query(
+          "SELECT id FROM artifacts WHERE run_id=$1 AND provider_execution_id=$2 AND kind='recording'",
+          [runId, providerExecutionId],
+        )
+      ).rows[0];
+      if (prior) return prior.id as string;
+      const finalExpiry = new Date(
+        Math.min(
+          expiresAt.getTime(),
+          recordingRetentionExpiry(current.finished_at).getTime(),
+        ),
+      );
+      if (finalExpiry.getTime() <= Date.now()) return null;
+      await c.query(
+        "INSERT INTO artifacts(id,run_id,kind,content_type,byte_length,sha256,iv,auth_tag,provider_execution_id,expires_at) VALUES($1,$2,'recording',$3,$4,$5,$6,$7,$8,$9)",
+        [
+          id,
+          runId,
+          contentType,
+          data.length,
+          createHash("sha256").update(data).digest("hex"),
+          iv.toString("base64"),
+          tag.toString("base64"),
+          providerExecutionId,
+          finalExpiry,
+        ],
+      );
+      return id;
+    });
+    if (published !== id) await unlink(artifactPath(id));
+    return published;
   } catch (error) {
     await unlink(temporary).catch(() => undefined);
     await unlink(artifactPath(id)).catch(() => undefined);
     throw error;
   }
-  return id;
 }
 async function deleteArtifact(runId: string, id: string, client?: Queryable) {
   const redact = async (c: Queryable) => {

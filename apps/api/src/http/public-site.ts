@@ -6,7 +6,7 @@ const page =
   /^(?:\/|\/credits|\/docs(?:\/(?:quickstart|first-campaign|evidence|integrations|api|troubleshooting))?|\/app(?:\/(?:campaigns|findings|targets|integrations|runs\/[a-f0-9-]+))?)\/?$/;
 const asset = /^\/assets\/[\w.-]+\.(?:js|css|woff2?)$/;
 const brand =
-  /^\/brand\/(?:vouch-mark\.webp|vouch-scout\.webp|vouch-builder\.webp|icon-192\.png)$/;
+  /^\/brand\/(?:vouch-mark\.webp|vouch-current\.webp|icon-192\.png)$/;
 const license =
   /^\/licenses\/(?:phosphor-MIT|geist-OFL|geist-mono-OFL|opencode-MIT)\.txt$/;
 

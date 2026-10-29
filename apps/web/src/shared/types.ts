@@ -29,7 +29,7 @@ export type Verdict = {
 export type Target = {
   id: string;
   name: string;
-  transport: "fixture" | "pstn";
+  transport: "pstn";
   phone: string | null;
   authorization_reference: string;
   created_at: string;
@@ -38,7 +38,7 @@ export type Campaign = {
   id: string;
   name: string;
   target_id: string;
-  mode?: "fixture" | "live";
+  mode?: "live";
   target_name: string;
   status: string;
   calls_used: number;
@@ -60,6 +60,11 @@ export type RunSummary = {
 };
 export type Run = RunSummary & {
   error?: string;
+  campaign_status?: string;
+  calls_used?: number;
+  scope?: Scope;
+  remainingSlots?: number;
+  exportReady?: boolean;
   events?: EvidenceEvent[];
   config_hash?: string;
   config_hash_algorithm?: string;
@@ -116,7 +121,10 @@ export type Overview = {
     hasMore: boolean;
   };
 };
-export type Navigate = (path: string) => void;
+export type Navigate = (
+  path: string,
+  options?: { replace?: boolean; scroll?: boolean },
+) => void;
 export type Action = (
   path: string,
   body: unknown,
@@ -155,4 +163,14 @@ export type LiveExecution = {
   last_error?: string | null;
   terminal_at?: string | null;
   cancel_requested?: boolean;
+};
+
+export type FindingsPage = {
+  runs: RunSummary[];
+  pagination: {
+    limit: number;
+    offset: number;
+    totalRuns: number;
+    hasMore: boolean;
+  };
 };

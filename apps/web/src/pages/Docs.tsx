@@ -48,11 +48,11 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "text",
-            text: "Vouch is a workspace for authorized voice-agent security testing. Define a business policy, run a bounded scenario, and review what the target actually did. A convincing answer is a starting point. Tool execution and backend observations establish the outcome.",
+            text: "Vouch is a workspace for authorized voice-agent security testing. Define a business policy, place bounded calls to a target you are approved to test, and review what actually happened. Conversation alone cannot prove a policy breach. Tool execution and backend observations establish the outcome.",
           },
           {
             kind: "text",
-            text: "Vouch includes a no-credentials local fixture and a coded live PSTN path using a Twilio-backed Bolna caller. Both apply the same contact-change policy with a verified control and false-authority scenario. Session authentication, workspace isolation, signed backend evidence and encrypted recording storage are implemented. Provider account setup and voice acceptance testing remain operator work.",
+            text: "The supported call path uses an isolated Twilio-backed Bolna caller. Supabase PostgreSQL stores workspace data, captured configuration and evidence metadata. Credentials, provider controls and an authorized target must be configured before a real campaign can launch.",
           },
         ],
       },
@@ -62,14 +62,15 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "list",
-            ordered: true,
             items: [
-              "Register a target you own or have explicit permission to test.",
-              "Choose the test window, call count, duration, budget, and stop condition.",
-              "Run the verified control and false-authority scenario within that scope.",
-              "Inspect the transcript, tool events, verification record, and observed state.",
-              "Review a candidate finding and export its versioned regression case.",
+              "Configure the server database, sign-in, caller, carrier and evidence keys.",
+              "Register a target you own or have explicit written permission to test.",
+              "Authorize the window, call count, duration, budget and stop condition.",
+              "Launch the control and false-authority scenarios as real provider calls.",
+              "Review actual transcripts, recordings and signed backend observations.",
+              "Confirm or dismiss a supported finding and export its regression case.",
             ],
+            ordered: true,
           },
         ],
       },
@@ -79,44 +80,44 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "table",
-            columns: ["Capability", "Current support"],
+            columns: ["Capability", "Current boundary"],
             rows: [
-              ["Synthetic campaigns", "Available with no provider key"],
               [
-                "Live PSTN campaigns",
-                "Implemented behind explicit account, scope and resource-control gates",
-              ],
-              [
-                "Backend policy evaluation",
-                "Deterministic assertions against trusted ordered events",
-              ],
-              [
-                "Human review and export",
-                "Preserved configuration, terminal findings and append-only review history",
+                "Real PSTN campaigns",
+                "Implemented behind explicit caller, carrier, target and resource gates",
               ],
               [
                 "Workspace access",
-                "Password sessions, workspace membership, role checks and database row-level isolation",
+                "Server sessions, owner and member roles, PostgreSQL tenant isolation",
               ],
               [
-                "Recordings and signed connectors",
-                "Provider audio encrypted at rest and separate per-run backend and provider credentials",
+                "Evidence evaluation",
+                "Deterministic grading against signed ordered backend facts",
               ],
               [
-                "Deployment and retention",
-                "Nonroot containers, separate workers, maintenance and backup/restore scripts",
+                "Review and export",
+                "Append-only review history and captured regression configuration",
+              ],
+              [
+                "Recordings",
+                "Actual provider audio encrypted at rest when retrieval succeeds",
+              ],
+              [
+                "Database setup",
+                "Versioned SQL migrations for an operator-configured Supabase PostgreSQL database",
               ],
             ],
           },
           {
             kind: "note",
-            title: "Know what you are testing",
-            text: "Fixture runs use fictional data and do not place calls or incur provider charges. Browser speech replay is a synthetic reading of the transcript. It is not a recording of a call.",
+            title: "Real data only",
+            text: "An empty workspace stays empty until real records exist. Setup does not seed campaign statistics, manufacture calls or provide a fixture launch. Missing provider or backend observations remain unavailable or unknown.",
+            warning: false,
           },
           {
             kind: "note",
-            title: "Implementation and validation are different",
-            text: "The code paths described here are implemented. No new voice calls, provider acceptance tests or deployment exercises were performed for this delivery. A configuration-ready status is not a claim that your account or a live call has been verified.",
+            title: "Verification requires the actual account",
+            text: "Implemented controls are not proof of provider authentication, carrier enforcement, final billing or successful database deployment. These checks need the actual private credentials and approved target. No live acceptance success is claimed before those checks occur.",
             warning: true,
           },
         ],
@@ -127,7 +128,7 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "text",
-            text: "Start with Quickstart to run the services locally. If the workspace is already running, continue to First campaign. The Evidence guide explains how to separate a requested action from a verified side effect.",
+            text: "Follow Quickstart to configure the database and server. Continue to First campaign only after the integration readiness checks pass. Evidence and policies explains how to separate a requested action from a verified side effect.",
           },
         ],
       },
@@ -138,8 +139,8 @@ const guides: Guide[] = [
     title: "Quickstart",
     group: "Start here",
     description:
-      "Run the complete synthetic workflow locally. No Bolna account or provider key is required.",
-    time: "8 min setup",
+      "Configure Supabase PostgreSQL and private server settings before connecting an approved real target.",
+    time: "10 min setup",
     sections: [
       {
         id: "requirements",
@@ -147,17 +148,24 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "table",
-            columns: ["Dependency", "Version or requirement"],
+            columns: ["Dependency", "Requirement"],
             rows: [
               ["Node.js", "24.19 or later"],
               ["pnpm", "11.25.0"],
-              ["Docker", "An accessible running daemon"],
-              ["Chromium", "Required only for browser checks"],
+              [
+                "Supabase PostgreSQL",
+                "A project you control with database connection credentials",
+              ],
+              [
+                "Docker",
+                "Optional for a separate local PostgreSQL development or test database",
+              ],
+              ["Chromium", "Required for browser checks"],
             ],
           },
           {
             kind: "text",
-            text: "The commands below use Bash. On Windows, use WSL2 with Docker access. Run service commands from the repository root. The lockfile pins application packages so each teammate installs the same dependency versions.",
+            text: "Commands use Bash from the repository root. On Windows, use WSL2. Supabase supplies PostgreSQL for Vouch server storage. This application uses its own server sessions and does not require browser Supabase credentials.",
           },
         ],
       },
@@ -167,45 +175,79 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "code",
-            title: "Clone the repository",
+            title: "Clone and install",
             language: "shell",
             text: "git clone https://github.com/MokiMeow/Vouch.git\ncd Vouch\npnpm install --frozen-lockfile",
           },
           {
             kind: "text",
-            text: "If you are working in a prepared cloud checkout, use that existing repository. Run `bash scripts/cloud-install.sh` to install dependencies, start the local database, apply migrations, and build the interface.",
+            text: "Use the existing checkout when one is already prepared. Do not clone over retained files or replace an existing environment file.",
           },
         ],
       },
       {
-        id: "configure-local-services",
-        title: "Configure local services",
+        id: "configure-server",
+        title: "Configure the server",
         blocks: [
           {
             kind: "code",
-            title: "Create local configuration safely",
+            title: "Preserve private configuration",
             language: "shell",
-            text: "test -e .env || (umask 077; cp .env.example .env)\nchmod 600 .env\nbash scripts/db-start.sh\npnpm db:migrate",
+            text: "test -e .env || (umask 077; cp .env.example .env)\nchmod 600 .env\npnpm setup:secrets",
           },
           {
             kind: "text",
-            text: "This preserves an existing `.env` file. Set `DATABASE_URL` for your local database. The sample configuration matches the development Docker setup. Credentials stay in the server environment and must never be committed.",
+            text: "Fill the blank server settings using a private editor or secret manager. Placeholder values are instructions to supply credentials later. They are not working database URLs or API keys. The secret helper creates only missing local signing and recording keys and does not print them.",
+          },
+          {
+            kind: "table",
+            columns: ["Setting", "Required value"],
+            rows: [
+              [
+                "DATABASE_URL",
+                "Actual Supabase direct or session-pooler PostgreSQL URI with verified TLS",
+              ],
+              ["VOUCH_AUTH_MODE", "session"],
+              [
+                "PUBLIC_ORIGIN",
+                "Exact browser origin with no trailing slash or path",
+              ],
+              [
+                "VOUCH_BOOTSTRAP_EMAIL and VOUCH_BOOTSTRAP_PASSWORD",
+                "Private initial owner credentials for an empty user database",
+              ],
+              ["VOUCH_BOOTSTRAP_WORKSPACE", "Optional initial workspace name"],
+              [
+                "VOUCH_LIVE_ENABLED",
+                "Keep false until authorized provider acceptance is ready",
+              ],
+            ],
           },
           {
             kind: "note",
-            title: "Choose the access mode",
-            text: "Loopback development defaults to a password-free local fixture workspace. Set VOUCH_AUTH_MODE to session to require sign-in and workspace membership. Production rejects local mode and requires an HTTPS PUBLIC_ORIGIN. The database helper preserves retained data and does not reset existing database credentials.",
+            title: "Keep database credentials on the server",
+            text: "Use the PostgreSQL connection URI from your Supabase project. A public project URL, publishable key or legacy anon key is not a PostgreSQL connection string. Never put database credentials or provider keys in frontend variables.",
             warning: true,
+          },
+        ],
+      },
+      {
+        id: "apply-migrations",
+        title: "Apply versioned migrations",
+        blocks: [
+          {
+            kind: "text",
+            text: "Review apps/api/src/database/migrations and docs/operations/supabase.md before applying the ordered SQL files. DATABASE_MIGRATION_URL can supply a separate migrator connection and defaults to DATABASE_URL when omitted. The migrator must own the Vouch tables and have the schema privileges and role-grant authority required by the migrations. CREATEROLE is needed when the restricted role does not exist. A PostgreSQL superuser is not inherently required.",
           },
           {
             kind: "code",
-            title: "Generate missing private storage and connector keys",
+            title: "Apply configured database migrations",
             language: "shell",
-            text: "pnpm setup:secrets",
+            text: "pnpm db:migrate",
           },
           {
             kind: "text",
-            text: "The key helper fills only missing or blank signing and recording keys in the ignored `.env`. It preserves existing keys and does not print them. Fixtures still require no provider account. Never rotate an artifact key without migrating existing recordings.",
+            text: "Run migrations only after replacing the database placeholder and confirming the destination. Use the Supabase direct connection or session pooler on port 5432 rather than transaction pooling on port 6543. Remote connections require certificate verification. DATABASE_SSL_CA_FILE can provide a trusted PEM certificate file. Do not disable TLS checks or print the connection URI. The migration ledger records applied SQL versions. Docker is unnecessary for Supabase and remains optional for isolated local tests.",
           },
         ],
       },
@@ -215,61 +257,23 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "code",
-            title: "Run all development services",
+            title: "Start API worker and interface",
             language: "shell",
             text: "pnpm dev",
           },
           {
             kind: "text",
-            text: "This starts the API, database-backed worker, and Vite interface. By default, PostgreSQL uses port 54329, the API uses 4000, and the interface uses 5173. Open the Vite interface in your local browser and select New campaign.",
+            text: "Development starts the API, database-backed worker and Vite interface. The API uses loopback port 4000 and Vite uses loopback port 5173 by default. Set PUBLIC_ORIGIN to the exact browser origin used for sign-in. Production requires HTTPS and session mode.",
           },
           {
             kind: "code",
-            title: "Check the evidence store",
+            title: "Check API and database health",
             language: "shell",
-            text: "curl --fail http://127.0.0.1:4000/api/health",
+            text: "curl --fail --silent --show-error http://127.0.0.1:4000/api/health",
           },
           {
             kind: "text",
-            text: "A healthy response reports `status` as `ok` and `database` as `postgresql`. An open port alone does not establish that the database and API work together.",
-          },
-        ],
-      },
-      {
-        id: "workspace-authentication",
-        title: "Workspace authentication",
-        blocks: [
-          {
-            kind: "table",
-            columns: ["Server setting", "Required behavior"],
-            rows: [
-              ["VOUCH_AUTH_MODE", "Use session for authenticated workspaces"],
-              [
-                "PUBLIC_ORIGIN",
-                "Exact browser-facing origin with no trailing slash or path",
-              ],
-              [
-                "VOUCH_BOOTSTRAP_EMAIL",
-                "Initial owner email for an empty user database",
-              ],
-              [
-                "VOUCH_BOOTSTRAP_PASSWORD",
-                "Initial owner password with at least 14 characters",
-              ],
-              ["VOUCH_BOOTSTRAP_WORKSPACE", "Optional initial workspace name"],
-              [
-                "VOUCH_SESSION_HOURS",
-                "Absolute session lifetime from 1 to 168 hours, default 12",
-              ],
-            ],
-          },
-          {
-            kind: "text",
-            text: "Apply private server settings, run migrations and restart the API before signing in. Bootstrap creates the first owner once and does not overwrite existing users. Use workspace settings to add members, create another workspace or rotate a password. Password rotation signs out all sessions for that user.",
-          },
-          {
-            kind: "text",
-            text: "Keep local mode on loopback with fictional data. Session mode carries the authorized workspace through every query and enforces PostgreSQL row-level policies. Production cookies are always Secure and require HTTPS. Remove the bootstrap password from deployment settings after the owner has signed in and rotated it.",
+            text: "Sign in as the bootstrap owner, rotate the initial password, then remove the bootstrap password from the server environment. Existing accounts are not overwritten on restart. Until the actual database and provider credentials are supplied, connection checks may report unavailable. Do not replace failures with demo data.",
           },
         ],
       },
@@ -279,89 +283,39 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "code",
-            title: "Run the core checks",
+            title: "Run static and unit checks",
             language: "shell",
-            text: "pnpm build\npnpm test\npnpm test:integration",
+            text: "pnpm build\npnpm test",
           },
           {
             kind: "text",
-            text: "Integration checks use a separate database whose name ends in `_test`. Browser checks require the API, worker, built web interface, and Chromium. They create clearly synthetic campaign records in the running development database.",
+            text: "Database and browser checks need an explicitly configured disposable test database and running services. Integration checks must never target retained workspace or customer data. Their controlled test observations do not represent real provider acceptance.",
           },
           {
             kind: "code",
-            title: "Run browser checks",
+            title: "Run configured isolated checks",
             language: "shell",
-            text: "pnpm test:browser\npnpm test:browser:requests\npnpm test:browser:design",
+            text: "pnpm test:integration\npnpm test:browser\npnpm test:browser:requests\npnpm test:browser:design",
           },
           {
             kind: "note",
-            title: "Acceptance remains with your team",
-            text: "The commands above are provided for your acceptance process. This delivery did not run the test suites, voice calls, container deployment or recovery exercises requested for your team to perform.",
-            warning: false,
+            title: "Keep acceptance evidence precise",
+            text: "Record which checks ran, their results and any blocked dependency. A successful build cannot establish real provider authentication, call completion, cancellation, final cost or a remote database migration. Those require the actual configured systems.",
+            warning: true,
           },
         ],
       },
       {
-        id: "production-deployment",
-        title: "Production deployment",
+        id: "deployment",
+        title: "Deployment boundary",
         blocks: [
           {
             kind: "text",
-            text: "The supplied Docker Compose setup separates the private database, migration job, API, worker and maintenance runner. The application runs as a nonroot user with a read-only root filesystem. Publish the loopback API through an operator-managed HTTPS reverse proxy.",
-          },
-          {
-            kind: "code",
-            title: "Create private production configuration",
-            language: "shell",
-            text: "umask 077\ntest -e .env.production || touch .env.production\nchmod 600 .env.production\nmkdir -p .data/secrets\nchmod 700 .data/secrets\npnpm setup:secrets --file .env.production",
-          },
-          {
-            kind: "table",
-            columns: ["Setting or file", "Required value"],
-            rows: [
-              [
-                "POSTGRES_USER and POSTGRES_DB",
-                "Operator-selected database owner and database name",
-              ],
-              [
-                "DATABASE_URL",
-                "Selected PostgreSQL credentials with service host database and port 5432",
-              ],
-              [
-                ".data/secrets/postgres_password",
-                "Selected database password only, kept at mode 0600 and matching DATABASE_URL",
-              ],
-              ["PUBLIC_ORIGIN", "The exact external HTTPS origin"],
-              ["VOUCH_AUTH_MODE", "session"],
-              [
-                "VOUCH_BOOTSTRAP_EMAIL and VOUCH_BOOTSTRAP_PASSWORD",
-                "Initial owner credentials for an empty user database",
-              ],
-              [
-                "VOUCH_ARTIFACT_KEY",
-                "Private recording key retained across restarts and backups",
-              ],
-              [
-                "VOUCH_RECORDING_HOSTS",
-                "Exact approved provider audio hostnames",
-              ],
-            ],
+            text: "Publish the API behind an HTTPS reverse proxy with session authentication. Keep API and worker settings consistent, encrypted artifact storage private and encryption keys separately backed up. The Supabase operational guide covers connection selection, TLS, migration permissions and restore responsibilities.",
           },
           {
             kind: "text",
-            text: "Fill the remaining required production values with a private editor or secret manager before building. Do not reuse development credentials. Never print resolved Compose configuration into shared logs. The live integration guide lists the additional caller and billing controls.",
-          },
-          {
-            kind: "code",
-            title: "Build and start the production services",
-            language: "shell",
-            text: "docker compose --env-file .env.production build\ndocker compose --env-file .env.production up -d database migrate api worker\ndocker compose --env-file .env.production ps",
-          },
-          {
-            kind: "note",
-            title: "Prepare the deployment before customer traffic",
-            text: "A successful build does not validate a deployment. Configure HTTPS, shared upstream rate limits, monitored storage and recovery procedures. Protect encryption keys separately from database and artifact backups.",
-            warning: true,
+            text: "Containerized deployment and a local PostgreSQL option remain documented in docs/operations/deployment.md. Do not start an extra local database when DATABASE_URL intentionally points to Supabase.",
           },
         ],
       },
@@ -377,11 +331,17 @@ const guides: Guide[] = [
     sections: [
       {
         id: "choose-a-target",
-        title: "Choose a target",
+        title: "Choose an approved target",
         blocks: [
           {
             kind: "text",
-            text: "In the workspace, select New campaign and choose Synthetic fixture or Live Bolna call. Fixtures can create a local fictional support target. Live mode requires a previously registered approved phone target and a configuration-ready integration. Registration checks the exact operator allowlist and authorization reference without placing a call.",
+            text: "Register an actual PSTN destination from Targets with its authorization reference. The number must exactly match the server operator allowlist in E.164 form. Registering the target records scope and authorization without placing a call. There is no fixture launch or automatic demo target.",
+          },
+          {
+            kind: "note",
+            title: "Current policy identity",
+            text: "This version speaks the fictional test identity Alex Morgan and account SYN-1042 to the actual target. Its baseline verification method is synthetic_challenge. The approved target must support that isolated test account. These are controlled inputs to a real call, not generated execution evidence. Do not use a real customer identity or credential.",
+            warning: true,
           },
         ],
       },
@@ -391,99 +351,103 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "table",
-            columns: ["Control", "Enforced behavior"],
+            columns: ["Control", "Server boundary"],
             rows: [
               [
                 "Maximum calls",
-                "2 to 20 slots, including reruns. The first pair reserves 2.",
+                "2 to 20 slots including reruns. The initial pair reserves 2.",
               ],
               [
                 "Concurrency",
-                "1 active case globally, including across worker processes and unresolved live dispatches",
+                "1 active case globally across workers and unresolved dispatches",
               ],
-              [
-                "Duration",
-                "40 to 300 seconds per permitted call. Live callers receive provider and carrier controls; fixtures use a logical 32-second event trace.",
-              ],
+              ["Duration", "40 to 300 seconds per authorized call"],
               [
                 "Budget",
-                "0 to 100 USD. Fixtures cost 0. Live calls reserve a configured all-component worst-case cost before submission.",
+                "0 to 100 USD subject to a positive sufficient live reservation",
               ],
               [
                 "Window",
-                "Future work remains queued. Expired work fails before execution.",
+                "1 to 1440 minutes. Future work stays queued and expired work cannot dispatch.",
               ],
               [
                 "Stop condition",
-                "An observed violation can stop queued work. Stop and expiry also request cancellation of an active live call.",
+                "An observed violation can stop queued work. Stop or expiry requests cancellation of active calls.",
               ],
             ],
           },
           {
             kind: "text",
-            text: "The caller uses the fictional identity Alex Morgan and account SYN-1042. The server requires both scenario categories and prohibits real personal data, real payments, and external targets. Model output cannot replace the captured scope.",
+            text: "The server captures scope immutably. The caller cannot extend its window, allowlist, call count or budget. Provide enough time for the pair to finish inside the authorized window and enough budget for conservative all-component reservations.",
           },
         ],
       },
       {
-        id: "run-the-pair",
-        title: "Run the pair",
-        blocks: [
-          {
-            kind: "text",
-            text: "Authorize the displayed scope and select Launch fixture campaign. The worker runs a benign control that completes backend verification, then a false-authority scenario that claims a prior team already verified the caller.",
-          },
-          {
-            kind: "text",
-            text: "The synthetic backend is intentionally vulnerable and stays identical for both scenarios. The control can satisfy the policy, while the false-authority case demonstrates an execution without the required verification. Fixtures complete immediately in real time.",
-          },
-        ],
-      },
-      {
-        id: "launch-a-live-campaign",
-        title: "Launch a live campaign",
+        id: "prepare-integration",
+        title: "Prepare the integration",
         blocks: [
           {
             kind: "list",
             items: [
-              "Configure the caller, Twilio controls, billing ceiling, signing keys and recording hosts using Integrations.",
-              "Register a phone target you own or have explicit permission to test.",
-              "Select Live Bolna call, set an affordable budget and authorize the displayed scope.",
-              "Select Authorize and launch live campaign only when you intend to place real calls.",
-              "Open each run to connect trusted backend events and inspect provider execution, budget reservations and actual recording availability.",
+              "Set actual Bolna and same-account Twilio credentials only on the server.",
+              "Confirm the caller template, billing interpretation and all-component rate ceiling.",
+              "Configure signed backend instrumentation and approved recording hosts.",
+              "Use the read-only connection check and resolve every live readiness blocker.",
+              "Enable live dispatch only when authorized to place the displayed real calls.",
             ],
             ordered: true,
           },
           {
             kind: "text",
-            text: "The server captures the caller template, effective model, scenario prompts, scope and billing interpretation. The worker provisions an isolated caller for the case and verifies its captured configuration before dispatch. It does not rewrite the target to make the attack easier.",
+            text: "A connection check reads provider configuration and places no call. Missing credentials or network access remain visible blockers. A successful read does not establish call completion or carrier control.",
+          },
+        ],
+      },
+      {
+        id: "launch-a-live-campaign",
+        title: "Authorize and launch",
+        blocks: [
+          {
+            kind: "list",
+            items: [
+              "Choose the registered approved phone target.",
+              "Review the captured window, call slots, duration, budget and stop condition.",
+              "Confirm authorization and launch only when real calls are intended.",
+              "Keep API and worker services available while the campaign runs.",
+              "Inspect each actual execution and signed backend stream from the run page.",
+            ],
+            ordered: true,
+          },
+          {
+            kind: "text",
+            text: "The worker provisions a separate captured caller for the control and false-authority scenarios. Both call the same target without weakening its tools or changing its verification policy.",
           },
           {
             kind: "note",
-            title: "Uncertain submission does not trigger a replacement call",
-            text: "A timeout after submission can mean the provider accepted the call. The worker retains the slot and reservation while reconciling. An owner can link a known existing execution from the run page; the worker still verifies its target, caller and run correlation.",
+            title: "Uncertain submission keeps its reservation",
+            text: "A timeout after submission may mean the provider accepted the call. The worker retains the slot and reconciles the existing execution. An owner may link a known execution for independent verification. Never create a replacement call merely because a response was lost.",
             warning: true,
           },
         ],
       },
       {
         id: "review-the-evidence",
-        title: "Review the evidence",
+        title: "Review actual evidence",
         blocks: [
           {
             kind: "list",
-            ordered: true,
             items: [
-              "Open a finished case from the campaign or Findings. Failed or cancelled calls can still contain a reviewable policy violation.",
-              "Read the transcript and compare its claims with the Timeline and Raw Events tabs.",
-              "Check the required verification event and the observed tool execution.",
-              "Inspect the before and after account state. Unknown state remains unknown.",
+              "Open a terminal run from the campaign or Findings.",
+              "Compare the provider transcript with ordered backend events.",
+              "Check prior trusted identity verification and successful tool execution.",
+              "Inspect independently observed before and after account state.",
               "Confirm or dismiss a candidate violation with a written rationale.",
             ],
+            ordered: true,
           },
           {
             kind: "text",
-            text: "A reviewer decision appends audit history without rewriting the deterministic verdict. Candidate violations can be confirmed or dismissed when the run is completed, failed or cancelled. The operational call status and business-policy outcome are separate.",
+            text: "A failed or cancelled call can still contain a reviewable violation. Call status and policy outcome are separate. Missing transcript, audio, state or verification telemetry remains unavailable or unknown. Workspace counts come from stored real records.",
           },
         ],
       },
@@ -493,11 +457,11 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "text",
-            text: "Rerun case keeps the captured configuration and consumes another slot in the same campaign. The server checks the window, stopped state, remaining slots, scope, and digest. Start a new authorized campaign when the old one is stopped or exhausted.",
+            text: "Rerun preserves captured configuration and consumes a remaining slot in the same campaign. The server checks the window, stopped state, scope, slots and integrity. Create a new authorized campaign when changing configuration or scope.",
           },
           {
             kind: "text",
-            text: "Export regression downloads a versioned JSON file with the captured configuration, expected policy, observed evidence, verdict, integrity metadata, and review history. Keep the file with the change you are testing so the failed scenario can guide a future regression.",
+            text: "Export regression downloads captured configuration, policy, observed evidence, verdict, integrity metadata and review history. A queued or evidence-free run returns HTTP 409 rather than an invented regression case. Preserve real exports with the change under review.",
           },
         ],
       },
@@ -517,7 +481,7 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "text",
-            text: "The available baseline is `contact-verification-v1`. A successful `change_contact_phone` execution requires a preceding trusted `identity.verified` event for the same account and call. The fixture accepts the backend `synthetic_challenge` method.",
+            text: "The current baseline is contact-verification-v1. Successful change_contact_phone execution requires a preceding trusted identity.verified event for the same account and call. This policy version accepts the backend synthetic_challenge method for the authorized test account SYN-1042. Actual backend instrumentation must produce the event.",
           },
           {
             kind: "note",
@@ -681,7 +645,7 @@ const guides: Guide[] = [
           },
           {
             kind: "text",
-            text: "Missing provider audio remains unavailable. Live calls never fall back to browser speech synthesis. Fixture replay remains an explicitly synthetic reading of the fixture transcript.",
+            text: "Missing provider audio stays unavailable. Recordings come only from the correlated real execution. The application does not synthesize replacement speech or manufacture transcript turns.",
           },
           {
             kind: "text",
@@ -734,12 +698,18 @@ const guides: Guide[] = [
     time: "8 min read",
     sections: [
       {
-        id: "synthetic-runtime",
-        title: "Synthetic runtime",
+        id: "connection-boundary",
+        title: "Connection boundary",
         blocks: [
           {
             kind: "text",
-            text: "The local runtime is `vouch-fixture-state-machine@1` with API flavor `fixture-v1`. It produces normalized conversation and tool events against the instrumented fictional backend. No speech provider or external target is required.",
+            text: "The product launches actual Twilio-backed Bolna PSTN calls to an approved target. All credentials are server-only. Supabase stores application data through PostgreSQL rather than a browser database client. No provider key is bundled into the interface.",
+          },
+          {
+            kind: "note",
+            title: "Credentials can be supplied later",
+            text: "Blank settings and documented placeholders intentionally leave the connection unavailable. Add the actual values privately, restart the services and rerun readiness checks. Placeholder strings must not be treated as successful connections.",
+            warning: false,
           },
         ],
       },
@@ -850,7 +820,7 @@ const guides: Guide[] = [
           },
           {
             kind: "text",
-            text: "No actual provider authentication, live conversation, carrier enforcement or final billing behavior is claimed as verified for this delivery. Your team must perform those acceptance checks with the authorized account. Network policy can block access before a credential reaches the provider.",
+            text: "Provider authentication, live conversation, carrier enforcement and final billing must be checked against the actual authorized account after its credentials are configured. A network failure can occur before authentication. No live success is claimed from static configuration or an API key alone.",
           },
           {
             kind: "text",
@@ -865,7 +835,7 @@ const guides: Guide[] = [
     title: "API reference",
     group: "Build with Vouch",
     description:
-      "Explore the local HTTP surface, inspect a run, and retrieve its regression artifact.",
+      "Use authenticated workspace endpoints to inspect actual campaigns, findings and regression artifacts.",
     time: "8 min read",
     sections: [
       {
@@ -874,7 +844,7 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "text",
-            text: "The default development base URL is `http://127.0.0.1:4000`. Local fixture mode is loopback-only. Session mode requires a signed-in workspace membership for product data. Production requires an exact HTTPS PUBLIC_ORIGIN. Responses are JSON except recording streams and downloaded regression artifacts.",
+            text: "The default development API origin is http://127.0.0.1:4000. Session mode requires sign-in and workspace membership for product data. Production requires an exact HTTPS PUBLIC_ORIGIN. Responses are JSON except authenticated audio streams and downloaded regression artifacts.",
           },
           {
             kind: "text",
@@ -960,12 +930,16 @@ const guides: Guide[] = [
                 "Read paginated campaigns with associated runs, global counts and live readiness",
               ],
               [
+                "GET /api/findings?search=&outcome=&limit=&offset=",
+                "Search all findings in the selected workspace with outcome filtering and server pagination",
+              ],
+              [
                 "POST /api/targets",
-                "Register an authorized fixture or allowlisted phone target",
+                "Register an explicitly authorized operator-allowlisted PSTN target",
               ],
               [
                 "POST /api/campaigns",
-                "Capture mode fixture or live with a registered target and immutable scope",
+                "Capture a real live campaign with its registered target and immutable scope",
               ],
               [
                 "POST /api/campaigns/{campaignId}/stop",
@@ -975,7 +949,11 @@ const guides: Guide[] = [
           },
           {
             kind: "text",
-            text: "Target creation requires a name, transport, explicit authorization and an authorization reference. Campaign creation includes mode, targetId and the full validated scope. Overview accepts limit from 1 to 100 and a nonnegative offset, returning pagination metadata plus global summary counts. Use the workspace form for a correctly bounded first campaign.",
+            text: "Target creation requires a name, PSTN transport, authorization and an authorization reference. Campaign creation uses the registered target and full validated scope. Overview and findings accept limit from 1 to 100 and a nonnegative offset. Findings filtering happens across the workspace before pagination rather than only within one downloaded page.",
+          },
+          {
+            kind: "text",
+            text: "The Findings browser route preserves q, outcome and page in its URL. The API uses search, outcome, limit and offset. The server session determines the workspace. A search cannot read another workspace or create example findings.",
           },
         ],
       },
@@ -1018,6 +996,12 @@ const guides: Guide[] = [
           {
             kind: "text",
             text: "Use the complete run UUID from its evidence page URL. Review requests require a decision of `confirmed` or `dismissed` and a note of 3 to 2000 characters. The export contains the schema version, scenario, captured configuration and digest, expected policy, observed verdict, review history, and realized evidence.",
+          },
+          {
+            kind: "note",
+            title: "Export requires evidence",
+            text: "Evidence-free runs return HTTP 409. A terminal status without backend observations must not be presented as a verified side effect. Keep unknown outcomes explicit.",
+            warning: false,
           },
         ],
       },
@@ -1069,7 +1053,7 @@ const guides: Guide[] = [
           },
           {
             kind: "text",
-            text: "Use the Evidence guide for canonical JSON signing, stream sequences, replay protection and final completeness. Backend and provider credentials are distinct. Synthetic runs reject live connector ingestion. The old shared bearer evidence endpoint is retired and cannot be used to bypass signed per-run correlation.",
+            text: "Use Evidence and policies for canonical JSON signing, stream sequences, replay protection and final completeness. Backend and provider keys are distinct. Only correlated actual executions can accept live evidence. The retired shared bearer endpoint cannot bypass signed per-run authentication.",
           },
           {
             kind: "note",
@@ -1089,36 +1073,31 @@ const guides: Guide[] = [
             rows: [
               [
                 "400",
-                "Invalid input, scope exhaustion, incompatible capture or provider contract failure",
+                "Invalid input or a rejected field value. Inspect the returned validation message.",
               ],
-              [
-                "401",
-                "Missing or invalid session or signed connector credential",
-              ],
+              ["401", "Missing or invalid session or connector credential"],
               [
                 "403",
-                "Untrusted origin, invalid CSRF, insufficient role or disallowed phone",
+                "Untrusted origin, invalid CSRF, insufficient role or disallowed target",
               ],
               [
                 "404",
-                "Unknown or inaccessible workspace record, expired artifact or private file",
-              ],
-              ["410", "Retired shared evidence ingestion endpoint"],
-              ["413", "Request body exceeds its configured boundary"],
-              ["429", "Rate-limited authentication attempt"],
-              [
-                "500 or 503",
-                "Service failure or missing required operational configuration",
+                "Unknown or inaccessible record, missing artifact or private file",
               ],
               [
                 "409",
-                "Provider artifacts still incomplete, possibly after partial transcript or recording recovery",
+                "Evidence-free export, conflicting state or incomplete artifact recovery",
               ],
+              ["410", "Retired shared evidence ingestion endpoint"],
+              ["413", "Request exceeds the configured body limit"],
+              ["429", "Rate-limited authentication attempt"],
+              ["500", "Unexpected internal service failure"],
+              ["503", "Required database or operational service unavailable"],
             ],
           },
           {
             kind: "text",
-            text: "Read the returned error message before retrying a mutation. A connection-check error can occur before provider authentication. The current API does not expose internal provider response bodies.",
+            text: "The response carries a safe error message. Input errors include stable field messages so a client can identify the rejected control. Read the status and message before retrying a mutation. Provider bodies, credentials and internal stack traces are not public API output.",
           },
         ],
       },
@@ -1138,17 +1117,17 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "text",
-            text: "Check that Docker is running, then confirm `DATABASE_URL` points to the intended local database. The API requires this setting and will not fall back to embedded credentials. Start the database and apply migrations before starting the API.",
+            text: "Confirm DATABASE_URL contains the actual intended Supabase PostgreSQL connection and that the project is reachable. Check provider TLS requirements, connection mode and migration-role privileges using docs/operations/supabase.md. Blank placeholders cannot establish a database connection.",
           },
           {
             kind: "code",
-            title: "Restart local services",
+            title: "Apply migrations and start configured services",
             language: "shell",
-            text: "bash scripts/db-start.sh\npnpm db:migrate\npnpm dev",
+            text: "pnpm db:migrate\npnpm dev",
           },
           {
             kind: "text",
-            text: "Do not start duplicate API or worker processes when the services already exist. Existing database containers retain their configuration. Changing a password in `.env` does not reset an existing database.",
+            text: "Docker is required only for an optional local database or container deployment. Do not start duplicate API or worker processes. Never reset retained data to solve an ordinary connection problem.",
           },
         ],
       },
@@ -1198,7 +1177,7 @@ const guides: Guide[] = [
         blocks: [
           {
             kind: "text",
-            text: "Unknown evidence means an observation has not been established. For live cases, check the signed connector sequence, actual provider execution identity, complete-log marker, recording host allowlist and encryption key. Missing audio is never replaced with synthetic speech. Fixtures can replay only their transcript using local browser voices.",
+            text: "Unknown means an observation has not been established. Check the backend stream sequence, actual execution identity, complete-log marker, recording host allowlist and encryption key. Missing audio is never replaced with generated speech. Export returns HTTP 409 when no evidence exists.",
           },
           {
             kind: "text",
@@ -1216,7 +1195,7 @@ const guides: Guide[] = [
           },
           {
             kind: "text",
-            text: "Switch workspaces through the workspace control. Password changes revoke all sessions. A workspace owner can provision access without an email integration. Local fixture mode cannot be used for production access and production cookies require HTTPS.",
+            text: "Switch workspaces through the workspace control. Password changes revoke all sessions. An owner can provision access without an email service. Production requires session mode and HTTPS. Supabase database credentials are separate from the application owner password.",
           },
         ],
       },
@@ -1225,41 +1204,17 @@ const guides: Guide[] = [
         title: "Retention and recovery",
         blocks: [
           {
-            kind: "code",
-            title: "Inspect retention candidates without deleting",
-            language: "shell",
-            text: "docker compose --env-file .env.production --profile operations run --rm -T maintenance",
-          },
-          {
-            kind: "code",
-            title: "Apply bounded retention maintenance",
-            language: "shell",
-            text: "docker compose --env-file .env.production --profile operations run --rm -T maintenance \\\n  node dist/server/scripts/maintenance.js --apply",
+            kind: "text",
+            text: "Schedule bounded retention and monitor failures. Expired recordings and sessions can be cleaned separately from campaign evidence. Unresolved calls and unsettled costs remain held rather than expiring solely due to age.",
           },
           {
             kind: "text",
-            text: "Expired recordings and sessions can be cleaned in bounded batches. Campaign evidence remains unless VOUCH_RUN_RETENTION_DAYS is explicitly set. Unresolved calls and unsettled costs never expire just because they are old. Schedule maintenance and alert on failures.",
-          },
-          {
-            kind: "code",
-            title: "Back up stopped writers to a new destination",
-            language: "shell",
-            text: "docker compose --env-file .env.production stop api worker\nmkdir -p .data/backups\nbash scripts/backup.sh .data/backups/snapshot-001\ndocker compose --env-file .env.production up -d api worker",
-          },
-          {
-            kind: "text",
-            text: "Stop maintenance and migration jobs as well before taking a consistent backup. The destination must not already exist. Preserve the database and encrypted artifact files together, with the encryption key protected separately. Restore only into empty storage and perform recovery acceptance before enabling calls.",
-          },
-          {
-            kind: "code",
-            title: "Restore into an empty deployment target",
-            language: "shell",
-            text: "docker compose --env-file .env.production up -d database\nbash scripts/restore.sh .data/backups/snapshot-001\ndocker compose --env-file .env.production run --rm -T migrate\ndocker compose --env-file .env.production up -d api worker",
+            text: "For Supabase, use provider-supported database backup and restore procedures alongside a consistent encrypted-artifact backup. Keep encryption keys separately protected and stop all writers when taking a coordinated snapshot. Local Docker database scripts are not a substitute for a Supabase recovery plan.",
           },
           {
             kind: "note",
-            title: "Recovery is operator work",
-            text: "These scripts refuse destructive overwrite, but a successful static build does not establish recovery. Exercise backup, restoration, recording decryption, workspace isolation and provider reconciliation before using the deployment for customer data.",
+            title: "Validate recovery before customer use",
+            text: "Exercise database restoration, recording decryption, workspace isolation and provider reconciliation on an isolated destination. A static build or placeholder connection does not validate disaster recovery.",
             warning: true,
           },
         ],
@@ -1621,7 +1576,7 @@ function DocContents({ guide }: { guide: Guide }) {
       <div className="docs-reading-note">
         <BookOpenIcon size={17} />
         <p>
-          Start with a fixture.
+          Authorize the target.
           <br />
           Keep the evidence.
         </p>
@@ -1688,31 +1643,19 @@ function GuideArticle({
         <span>{guide.group}</span>
         <span>{guide.time}</span>
       </div>
-      <div
-        className={`docs-title-row ${guide.slug === "" ? "has-mascot" : ""}`}
-      >
+      <div className="docs-title-row">
         <div>
           <h1 tabIndex={-1} ref={heading}>
             {guide.title}
           </h1>
           <p className="docs-lead">{guide.description}</p>
         </div>
-        {guide.slug === "" && (
-          <img
-            src="/brand/vouch-scout.webp"
-            alt=""
-            width={128}
-            height={128}
-            draggable={false}
-            onDragStart={(event) => event.preventDefault()}
-          />
-        )}
       </div>
       {guide.slug === "" && (
         <div className="docs-welcome-line">
           <span className="docs-live-dot" />
-          <span>Local fixtures available</span>
-          <span>No provider key needed</span>
+          <span>Real calls only</span>
+          <span>Private setup required</span>
         </div>
       )}
       <div className="docs-sections">

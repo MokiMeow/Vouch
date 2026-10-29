@@ -83,6 +83,27 @@ async function waitForDatabase() {
   }
 }
 async function main() {
+  const configured = process.env.DATABASE_URL;
+  if (
+    !configured ||
+    /YOUR_|REPLACE_|CHANGE_ME|PLACEHOLDER|\[|<|%5B/i.test(configured)
+  )
+    throw new Error(
+      "Database setup requires actual Supabase connection settings rather than placeholders",
+    );
+  const selected = new URL(configured);
+  if (!["postgres:", "postgresql:"].includes(selected.protocol))
+    throw new Error("A PostgreSQL connection is required");
+  if (selected.port === "6543")
+    throw new Error(
+      "Use a direct or session-pooler database connection rather than transaction pooling",
+    );
+  if (!["127.0.0.1", "localhost"].includes(selected.hostname)) {
+    console.log(
+      "External PostgreSQL selected. This command does not create or verify a Supabase project; apply migrations after configuring credentials and network access.",
+    );
+    return;
+  }
   startDatabase(localDatabase());
   for (let attempt = 0; attempt < 30; attempt++) {
     if (await waitForDatabase()) {
@@ -97,7 +118,7 @@ async function main() {
 }
 main().catch(() => {
   console.error(
-    "Vouch PostgreSQL startup failed. Check DATABASE_URL, Docker availability and existing container configuration.",
+    "Database setup did not complete. Configure actual Supabase direct/session connection settings, or an explicit loopback test database with Docker available. Existing containers and retained data are not reset.",
   );
   process.exitCode = 1;
 });

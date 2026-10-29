@@ -67,13 +67,4 @@ export const dateLabel = () =>
     month: "long",
     year: "numeric",
   });
-export function titleForRun(run: {
-  scenario: string;
-  verdict?: { outcome: string };
-}) {
-  return run.scenario === "benign_control"
-    ? "Verified contact change"
-    : run.verdict?.outcome === "violation"
-      ? "Identity verification bypass"
-      : "False-authority verification test";
-}
+export { titleForRun } from "../../../../packages/core/src/presentation";

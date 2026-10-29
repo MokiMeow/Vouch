@@ -22,7 +22,13 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, dateLabel, label, titleForRun, when } from "../../shared/lib";
-import { useEvidence, useOverview } from "../../shared/hooks/data";
+import { useEvidence, useOverview, useFindings } from "../../shared/hooks/data";
+import {
+  readView,
+  updateView,
+  runHref,
+  returnPath,
+} from "../../shared/navigation";
 import type {
   Action,
   AuthSession,
@@ -185,11 +191,13 @@ function useTimedNotice() {
 type ModalSettings = { type: "campaign" | "target"; targetId?: string } | null;
 export function Workspace({
   path,
+  location,
   navigate,
   session,
   onSessionChange,
 }: {
   path: string;
+  location: string;
   navigate: Navigate;
   session: AuthSession;
   onSessionChange: (session: AuthSession) => void;
@@ -197,22 +205,32 @@ export function Workspace({
   const [error, setError] = useState(""),
     [modal, setModal] = useState<ModalSettings>(null);
   const { notice, setNotice } = useTimedNotice();
-  const [historyOffset, setHistoryOffset] = useState(0);
-  const { data, refresh } = useOverview(setError, historyOffset);
-  useEffect(() => setHistoryOffset(0), [path]);
+  const view = readView(location);
+  const historyOffset = path === "/app/campaigns" ? (view.page - 1) * 50 : 0;
+  const overview = useOverview(undefined, historyOffset);
+  const { data, refresh } = overview;
+  const currentLocation = useRef(location);
+  currentLocation.current = location;
+  useEffect(() => {
+    setModal(null);
+    setError("");
+    setNotice("");
+  }, [location, setNotice]);
   const evidence = useEvidence(path);
   const page = pageFor(path);
   useEffect(() => {
     document.title = `${evidence.runId ? "Evidence" : page} · Vouch`;
   }, [page, evidence.runId]);
   async function action(endpoint: string, body: unknown, message: string) {
+    const source = currentLocation.current;
     try {
       const value = await api(endpoint, body);
-      setNotice(message);
+      if (currentLocation.current === source) setNotice(message);
       await refresh();
       return value;
     } catch (error) {
-      setError((error as Error).message);
+      if (currentLocation.current === source)
+        setError((error as Error).message);
       return null;
     }
   }
@@ -264,17 +282,22 @@ export function Workspace({
             data={data}
             evidence={evidence}
             page={page}
+            location={location}
             navigate={navigate}
             setModal={setModal}
             action={action}
           />
         ) : (
-          <WorkspaceLoading refresh={refresh} />
+          <WorkspaceLoading refresh={refresh} message={overview.error} />
         )}
-        {data?.pagination && ["Campaigns", "Findings"].includes(page) && (
+        {data?.pagination && page === "Campaigns" && !evidence.runId && (
           <HistoryPagination
             pagination={data.pagination}
-            onPage={setHistoryOffset}
+            onPage={(offset) =>
+              navigate(updateView(location, { page: offset / 50 + 1 }), {
+                scroll: false,
+              })
+            }
           />
         )}
         <WorkspaceFooter navigate={navigate} />
@@ -292,12 +315,31 @@ export function Workspace({
     </div>
   );
 }
-function WorkspaceLoading({ refresh }: { refresh: () => void }) {
+function WorkspaceLoading({
+  refresh,
+  message,
+}: {
+  refresh: () => void;
+  message?: string;
+}) {
   return (
     <div className="loading-state" role="status">
-      <SpinnerGapIcon className="spin" size={24} />
-      <h1>Opening your workspace.</h1>
-      <p>Connecting to the evidence store…</p>
+      {message ? (
+        <PlugsIcon size={28} />
+      ) : (
+        <SpinnerGapIcon className="spin" size={24} />
+      )}
+      <h1>{message ? "Connect your workspace." : "Opening your workspace."}</h1>
+      <p>
+        {message?.includes("DATABASE_")
+          ? "Add your Supabase connection in the server environment. Your workspace will show real records after setup."
+          : message || "Connecting to the evidence store…"}
+      </p>
+      {message && (
+        <a className="button secondary" href="/docs/quickstart">
+          Set up Supabase
+        </a>
+      )}
       <button className="text-button" onClick={refresh}>
         Try again <ArrowClockwiseIcon size={17} />
       </button>
@@ -348,6 +390,7 @@ type ContentProps = {
   data: Overview;
   evidence: ReturnType<typeof useEvidence>;
   page: string;
+  location: string;
   navigate: Navigate;
   setModal: (settings: ModalSettings) => void;
   action: Action;
@@ -388,7 +431,7 @@ function WorkspaceContent(props: ContentProps) {
         <RunDetail
           key={evidence.run.id}
           run={evidence.run}
-          back={() => navigate("/app")}
+          back={() => navigate(returnPath(props.location), { replace: true })}
           onUpdate={evidence.refresh}
           action={action}
         />
@@ -466,11 +509,12 @@ function PageHeading({
 function WorkspacePage({
   data,
   page,
+  location,
   navigate,
   setModal,
   action,
 }: ContentProps) {
-  const openRun = (id: string) => navigate(`/app/runs/${id}`);
+  const openRun = (id: string) => navigate(runHref(id, location));
   const campaign = () => setModal({ type: "campaign" });
   const views: Record<string, React.ReactNode> = {
     Overview: (
@@ -491,12 +535,15 @@ function WorkspacePage({
       />
     ),
     Findings: (
-      <FindingsView data={data} openRun={openRun} campaign={campaign} />
+      <FindingsView
+        openRun={openRun}
+        campaign={campaign}
+        location={location}
+        navigate={navigate}
+      />
     ),
     Targets: <TargetsView data={data} setModal={setModal} />,
-    Integrations: (
-      <IntegrationsView data={data} action={action} campaign={campaign} />
-    ),
+    Integrations: <IntegrationsView data={data} action={action} />,
   };
   return (
     <div className="page-enter" key={page}>
@@ -505,8 +552,8 @@ function WorkspacePage({
         <span>
           <span className="status-dot" />
           {data.live.enabled
-            ? "Scoped fixture and live campaigns"
-            : "Synthetic mode · live prerequisites pending"}
+            ? "Authorized provider campaigns"
+            : "Provider setup required"}
         </span>
       </div>
       <PageHeading page={page} setModal={setModal} />
@@ -615,7 +662,7 @@ function FindingRow({ run, open }: { run: Run; open: () => void }) {
   const view = findingPresentation(run),
     Icon = view.icon;
   return (
-    <button className="finding-row" onClick={open}>
+    <Link className="finding-row" to={runHref(run.id)} navigate={open}>
       <span className={`finding-symbol ${view.style}`}>
         <Icon size={26} weight="light" />
       </span>
@@ -623,13 +670,15 @@ function FindingRow({ run, open }: { run: Run; open: () => void }) {
         <strong>{titleForRun(run)}</strong>
         <span>
           {run.campaign_name} <span>·</span> {run.target_name}
-          <span>{run.synthetic ? "· Synthetic" : "· Provider evidence"}</span>
+          <span>{"· Provider evidence"}</span>
         </span>
       </span>
       <Badge tone={view.tone}>{view.caption}</Badge>
-      <span className="finding-review">{label(run.review)}</span>
+      <span className="finding-review">
+        {run.verdict?.outcome === "violation" ? label(run.review) : ""}
+      </span>
       <ArrowUpRightIcon size={20} />
-    </button>
+    </Link>
   );
 }
 function MissionIntro({
@@ -675,21 +724,12 @@ function MissionIntro({
           <span>FICTIONAL ACCOUNTS</span>
         </div>
       </div>
-      <div className="mission-art" aria-hidden="true">
-        <span className="mission-orbit orbit-one" />
-        <span className="mission-orbit orbit-two" />
-        <img
-          src="/brand/vouch-scout.webp"
-          width="220"
-          height="220"
-          alt=""
-          draggable={false}
-          onDragStart={(event) => event.preventDefault()}
-        />
-        <span className="mission-coordinate coordinate-one">OBSERVE</span>
-        <span className="mission-coordinate coordinate-two">VERIFY</span>
-      </div>
-      <div className="mission-trace" aria-label="Policy sequence">
+      <div
+        className="mission-trace"
+        role="region"
+        tabIndex={0}
+        aria-label="Policy sequence"
+      >
         <code>identity.verified</code>
         <ArrowRightIcon size={14} />
         <code>change_contact_phone</code>
@@ -844,12 +884,12 @@ function OverviewView({
           totalPending={data.summary?.pendingFindings}
         />
       </div>
-      <div className="fixture-footnote">
+      <div className="provider-footnote">
         <TerminalIcon size={16} />
         <p>
           {data.live.enabled
-            ? "Live campaigns consume your authorized provider budget. Fixtures remain free."
-            : "Fixture campaigns are synthetic. Live calls require configured resource controls."}
+            ? "Calls consume your authorized provider budget. Evidence comes from actual runs."
+            : "Connect your provider and authorized target to collect real call evidence."}
         </p>
       </div>
     </>
@@ -892,27 +932,40 @@ function CampaignsView({
 }
 
 function FindingsView({
-  data,
   openRun,
   campaign,
+  location,
+  navigate,
 }: {
-  data: Overview;
   openRun: (id: string) => void;
   campaign: () => void;
+  location: string;
+  navigate: Navigate;
 }) {
-  const [search, setSearch] = useState(""),
-    [filter, setFilter] = useState("all");
-  const visibleRuns = filterRuns(data.runs, search, filter);
+  const { search, outcome, page } = readView(location);
+  const [query, setQuery] = useState(search.trim());
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(search.trim()), 200);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const result = useFindings(query, outcome, page);
+  const data = result.data;
   return (
     <section className="findings-view">
       <div className="list-toolbar">
         <label className="search-field">
           <MagnifyingGlassIcon size={19} />
-          <span className="sr-only">Search findings</span>
+          <span className="sr-only">Search all findings</span>
           <input
-            placeholder="Search this history page…"
+            placeholder="Search all findings…"
+            maxLength={300}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) =>
+              navigate(
+                updateView(location, { search: e.target.value, page: 1 }),
+                { replace: true, scroll: false },
+              )
+            }
           />
         </label>
         <div className="filter-field">
@@ -922,8 +975,13 @@ function FindingsView({
           </label>
           <select
             id="outcome-filter"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            value={outcome}
+            onChange={(e) =>
+              navigate(
+                updateView(location, { outcome: e.target.value, page: 1 }),
+                { scroll: false },
+              )
+            }
           >
             <option value="all">All outcomes</option>
             <option value="violation">Candidate findings</option>
@@ -931,24 +989,48 @@ function FindingsView({
             <option value="unknown">Unknown evidence</option>
           </select>
         </div>
-        <span className="result-count">
-          {visibleRuns.length} conversations on this page
+        <span className="result-count" role="status">
+          {data
+            ? `${data.pagination.totalRuns} ${data.pagination.totalRuns === 1 ? "conversation" : "conversations"}`
+            : "Searching…"}
         </span>
       </div>
-      {visibleRuns.length ? (
-        visibleRuns.map((r) => (
-          <FindingRow run={r} open={() => openRun(r.id)} key={r.id} />
+      {result.error ? (
+        <div className="notice error" role="alert">
+          {result.error}
+          <button className="text-button" onClick={() => void result.refresh()}>
+            Try again
+          </button>
+        </div>
+      ) : !data ? (
+        <p role="status">Searching conversations…</p>
+      ) : data.runs.length ? (
+        data.runs.map((r) => (
+          <FindingRow key={r.id} run={r} open={() => openRun(r.id)} />
         ))
       ) : (
         <Empty
           title="Nothing in this view."
           text={
-            data.runs.length
+            search.trim() || outcome !== "all"
               ? "Try another search or outcome filter."
-              : "Start a campaign to collect conversations and policy evidence."
+              : "Register an authorized target and launch a call to collect evidence."
           }
-          button={data.runs.length ? undefined : "New campaign"}
+          button={
+            search.trim() || outcome !== "all" ? undefined : "New campaign"
+          }
           action={campaign}
+        />
+      )}
+      {data && (
+        <HistoryPagination
+          pagination={data.pagination}
+          noun="conversation"
+          onPage={(offset) =>
+            navigate(updateView(location, { page: offset / 50 + 1 }), {
+              scroll: false,
+            })
+          }
         />
       )}
     </section>
@@ -979,17 +1061,9 @@ function TargetsView({
             <div className="target-description">
               <div>
                 <h2>{t.name}</h2>
-                <Badge tone={t.transport === "fixture" ? "violet" : "amber"}>
-                  {t.transport === "fixture"
-                    ? "Synthetic target"
-                    : "Approved PSTN target"}
-                </Badge>
+                <Badge tone="violet">Approved PSTN target</Badge>
               </div>
-              <p>
-                {t.transport === "fixture"
-                  ? "Fictional accounts with instrumented backend evidence."
-                  : t.phone}
-              </p>
+              <p>{t.phone}</p>
               <details>
                 <summary>
                   <LockSimpleIcon size={15} />
@@ -1001,13 +1075,11 @@ function TargetsView({
             </div>
             <button
               className="button secondary"
-              disabled={t.transport !== "fixture" && !data.live.enabled}
+              disabled={!data.live.enabled}
               title={
-                t.transport === "fixture"
-                  ? "Start a campaign for this target"
-                  : data.live.enabled
-                    ? "Start an authorized live campaign"
-                    : data.live.reason
+                data.live.enabled
+                  ? "Start an authorized live campaign"
+                  : data.live.reason
               }
               onClick={() => setModal({ type: "campaign", targetId: t.id })}
             >
@@ -1018,7 +1090,7 @@ function TargetsView({
       ) : (
         <Empty
           title="Start with an approved target."
-          text="Add a synthetic agent or an approved phone number."
+          text="Register a phone number you own or are explicitly authorized to test."
           button="Register target"
           action={() => setModal({ type: "target" })}
         />
@@ -1037,8 +1109,7 @@ function TargetsView({
 function IntegrationsView({
   data,
   action,
-  campaign,
-}: Pick<CommonView, "data" | "action" | "campaign">) {
+}: Pick<CommonView, "data" | "action">) {
   return (
     <section className="integrations-view">
       <article className="integration-row">
@@ -1098,39 +1169,6 @@ function IntegrationsView({
           </button>
         </div>
       </article>
-      <article className="integration-row">
-        <span className="integration-monogram fixture-monogram">
-          <TerminalIcon size={29} weight="light" />
-        </span>
-        <div className="integration-content">
-          <div className="integration-title">
-            <h2>Synthetic fixture</h2>
-            <Badge tone="violet">Available locally</Badge>
-          </div>
-          <p>Deterministic calls with real backend state checks.</p>
-          <dl>
-            <div>
-              <dt>Caller</dt>
-              <dd>State machine · v1</dd>
-            </div>
-            <div>
-              <dt>Telephony</dt>
-              <dd>None · no live call</dd>
-            </div>
-            <div>
-              <dt>Backend events</dt>
-              <dd>Instrumented</dd>
-            </div>
-            <div>
-              <dt>Cost</dt>
-              <dd>$0.00</dd>
-            </div>
-          </dl>
-          <button className="button secondary" onClick={campaign}>
-            Run a fixture campaign <ArrowUpRightIcon size={17} />
-          </button>
-        </div>
-      </article>
       <div className="integration-note">
         <LockSimpleIcon size={22} weight="light" />
         <div>
@@ -1148,19 +1186,6 @@ function IntegrationsView({
       </div>
     </section>
   );
-}
-
-function filterRuns(runs: Run[], search: string, filter: string) {
-  return runs.filter(
-    (run) =>
-      matchesOutcome(run, filter) &&
-      `${run.campaign_name} ${run.target_name} ${run.scenario} ${run.review}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-  );
-}
-function matchesOutcome(run: Run, filter: string) {
-  return filter === "all" || run.verdict?.outcome === filter;
 }
 
 function firstCase(cases: Run[]) {
@@ -1188,22 +1213,18 @@ function CampaignRow({
 }) {
   const first = firstCase(cases),
     violations = violationCount(cases);
-  const open = () => {
-    if (first) openRun(first.id);
-  };
-  return (
-    <article className="campaign-row">
+  const active = ["queued", "running", "awaiting_evidence"].includes(c.status);
+  const content = (
+    <>
       <div className="campaign-name">
         <span className="campaign-symbol">
           <WaveformIcon size={23} weight="light" />
         </span>
         <div>
-          <button className="row-title" onClick={open} disabled={!first}>
-            {c.name}
-          </button>
+          <strong className="row-title">{c.name}</strong>
           <p>
             {c.target_name}
-            <span>{c.mode === "live" ? "· Live" : "· Synthetic"}</span>
+            <span>· Provider evidence</span>
           </p>
           {violations > 0 && (
             <span className="campaign-findings">
@@ -1220,31 +1241,40 @@ function CampaignRow({
           {cases.filter((r) => r.status === "completed").length}
           <span className="muted"> / {cases.length}</span>
         </span>
-        <small>
-          {c.calls_used} of {c.scope.maxCalls} call slots reserved
-        </small>
+        <small>{Math.max(0, c.scope.maxCalls - c.calls_used)} slots left</small>
       </div>
       {expanded && <time className="campaign-time">{when(c.created_at)}</time>}
-      <div className="campaign-actions">
-        <button
-          className="icon-button"
-          disabled={!first}
+      <span className="campaign-actions" aria-hidden="true">
+        <ArrowUpRightIcon size={20} />
+      </span>
+    </>
+  );
+  return (
+    <div className="campaign-entry">
+      {first ? (
+        <Link
+          className="campaign-row"
+          to={runHref(first.id)}
+          navigate={() => openRun(first.id)}
           aria-label={`Open ${c.name}`}
-          onClick={open}
         >
-          <ArrowUpRightIcon size={20} />
+          {content}
+        </Link>
+      ) : (
+        <article className="campaign-row">{content}</article>
+      )}
+      {active && (
+        <button
+          type="button"
+          className="campaign-stop"
+          onClick={() => stop(c.id)}
+          aria-label={`Stop ${c.name}`}
+        >
+          <StopIcon size={15} />
+          Stop
         </button>
-        {["queued", "running"].includes(c.status) && (
-          <button
-            className="icon-button"
-            aria-label={`Stop ${c.name}`}
-            onClick={() => stop(c.id)}
-          >
-            <StopIcon size={17} />
-          </button>
-        )}
-      </div>
-    </article>
+      )}
+    </div>
   );
 }
 type CommonView = {
@@ -1258,17 +1288,28 @@ type CommonView = {
 function HistoryPagination({
   pagination,
   onPage,
+  noun = "campaign",
 }: {
-  pagination: NonNullable<Overview["pagination"]>;
+  pagination: {
+    offset: number;
+    limit: number;
+    totalCampaigns?: number;
+    totalRuns?: number;
+    hasMore: boolean;
+  };
   onPage: (offset: number) => void;
+  noun?: string;
 }) {
-  const { offset, limit, totalCampaigns, hasMore } = pagination;
+  const { offset, limit, hasMore } = pagination;
+  const totalCampaigns = pagination.totalCampaigns ?? pagination.totalRuns ?? 0;
   return (
-    <nav className="history-pagination" aria-label="Campaign history pages">
+    <nav className="history-pagination" aria-label={`${noun} pages`}>
       <span>
         {totalCampaigns
-          ? `${offset + 1}–${Math.min(offset + limit, totalCampaigns)} of ${totalCampaigns} campaigns`
-          : "No campaigns yet"}
+          ? offset >= totalCampaigns
+            ? `No ${noun}s on this page`
+            : `${offset + 1}–${Math.min(offset + limit, totalCampaigns)} of ${totalCampaigns} ${noun}${totalCampaigns === 1 ? "" : "s"}`
+          : `No ${noun}s yet`}
       </span>
       <div>
         <button

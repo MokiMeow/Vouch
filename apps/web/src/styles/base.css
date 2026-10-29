@@ -1311,17 +1311,17 @@ pre {
   color: #6c6074;
   margin-top: 7px;
 }
-.fixture-footnote {
+.provider-footnote {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-top: 33px;
   color: #67606c;
 }
-.fixture-footnote svg {
+.provider-footnote svg {
   flex-shrink: 0;
 }
-.fixture-footnote p {
+.provider-footnote p {
   font-size: 11px;
   line-height: 1.8;
 }
@@ -1518,12 +1518,6 @@ pre {
   font-weight: 400;
   letter-spacing: -3px;
   padding-bottom: 3px;
-}
-.fixture-monogram {
-  background: #f2eaf87d;
-  border-color: #e5d4ee65;
-  color: #705e7a;
-  padding: 0;
 }
 .integration-content {
   flex: 1;
@@ -3564,15 +3558,15 @@ pre {
     top: 24px;
     width: 18px;
   }
-  .fixture-footnote {
+  .provider-footnote {
     align-items: flex-start;
     gap: 9px;
     margin-top: 26px;
   }
-  .fixture-footnote svg {
+  .provider-footnote svg {
     margin-top: 3px;
   }
-  .fixture-footnote p {
+  .provider-footnote p {
     font-size: 11px;
     line-height: 1.9;
   }

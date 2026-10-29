@@ -636,12 +636,12 @@ body .workspace-app .quiet-empty p {
   color: var(--workspace-muted);
   font-size: 13px;
 }
-body .workspace-app .fixture-footnote {
+body .workspace-app .provider-footnote {
   margin-top: 28px;
   gap: 8px;
   color: var(--workspace-muted);
 }
-body .workspace-app .fixture-footnote p {
+body .workspace-app .provider-footnote p {
   color: var(--workspace-muted);
   font-size: 12px;
 }
@@ -751,10 +751,6 @@ body .workspace-app .integration-monogram {
   background: #eeefed;
   color: var(--workspace-ink);
   box-shadow: none;
-}
-body .workspace-app .fixture-monogram {
-  background: #edeaf6;
-  color: #6c57a4;
 }
 body .workspace-app .integration-title h2 {
   color: var(--workspace-ink);
@@ -1192,10 +1188,10 @@ body .workspace-app .loading-state h1 {
   body .workspace-app .review-doc-link {
     font-size: 12px;
   }
-  body .workspace-app .fixture-footnote {
+  body .workspace-app .provider-footnote {
     margin-top: 23px;
   }
-  body .workspace-app .fixture-footnote p {
+  body .workspace-app .provider-footnote p {
     font-size: 11px;
   }
   body .workspace-app .workspace-footer {

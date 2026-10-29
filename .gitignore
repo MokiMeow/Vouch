@@ -17,3 +17,9 @@ Thumbs.db
 *.tsbuildinfo
 *.tmp
 *.bak
+
+# Local setup, secret material and Supabase CLI state
+.cache/
+*.key
+supabase/.temp/
+supabase/.branches/

@@ -17,11 +17,11 @@ import {
   withSystemDatabase,
   withWorkspaceDatabase,
 } from "../database/client";
-import { appendEvent } from "../execution/fixture";
+import { appendEvent } from "./events";
+export { evidenceAvailability } from "./availability";
 import {
   archiveRecording,
   artifactRouter,
-  migrateArtifacts,
   listRunArtifacts,
   recordingRetentionExpiry,
   runRetentionExpiry,
@@ -57,26 +57,7 @@ const batchSchema = z
     (value) => value.events.length > 0 || value.complete !== undefined,
     "An event or completion marker is required",
   );
-export async function migrateEvidence(c: Queryable) {
-  await c.query(`CREATE TABLE IF NOT EXISTS evidence_streams(
-    run_id uuid NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    role text NOT NULL CHECK(role IN ('backend','provider')), next_seq integer NOT NULL DEFAULT 1,
-    complete boolean NOT NULL DEFAULT false, complete_at integer,
-    PRIMARY KEY(run_id,role));
-    CREATE TABLE IF NOT EXISTS evidence_receipts(
-    run_id uuid NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    role text NOT NULL, batch_id uuid NOT NULL, nonce text NOT NULL,
-    digest text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY(run_id,role,batch_id), UNIQUE(run_id,role,nonce));
-    CREATE TABLE IF NOT EXISTS provider_evidence_cursors(
-    run_id uuid PRIMARY KEY REFERENCES runs(id) ON DELETE CASCADE,
-    transcript_digest text, snapshot_digest text, recording_failure text,
-    recording_redacted boolean NOT NULL DEFAULT false,
-    transcript_redacted boolean NOT NULL DEFAULT false);
-    ALTER TABLE provider_evidence_cursors ADD COLUMN IF NOT EXISTS recording_redacted boolean NOT NULL DEFAULT false;
-    ALTER TABLE provider_evidence_cursors ADD COLUMN IF NOT EXISTS transcript_redacted boolean NOT NULL DEFAULT false;`);
-  await migrateArtifacts(c);
-}
+
 function masterKey() {
   const raw = process.env.VOUCH_EVIDENCE_SIGNING_KEY;
   if (
@@ -361,6 +342,8 @@ export async function ingestLiveExecution(
     durationSeconds: snapshot.durationSeconds,
     costCents: snapshot.costCents,
     costFinalized: snapshot.costFinalized,
+    timestampGranularity: "execution",
+    timestampKnown: snapshot.durationSeconds !== null,
   };
   const digest = createHash("sha256")
     .update(canonicalJson(summary))
@@ -392,6 +375,8 @@ export async function ingestLiveExecution(
           text: snapshot.transcript,
           format: "provider_transcript",
           timestampGranularity: "execution",
+          timestampKnown: snapshot.durationSeconds !== null,
+          observedDurationSeconds: snapshot.durationSeconds,
           providerExecutionId: snapshot.id,
         },
       });
@@ -488,6 +473,8 @@ export async function recoverProviderTranscript(
         text: snapshot.transcript,
         format: "provider_transcript",
         timestampGranularity: "execution",
+        timestampKnown: snapshot.durationSeconds !== null,
+        observedDurationSeconds: snapshot.durationSeconds,
         providerExecutionId: snapshot.id,
         recoveredAfterCompletion: true,
       },

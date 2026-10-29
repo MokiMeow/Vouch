@@ -6,9 +6,9 @@ import {
   capturedPolicySchema,
   assertScope,
   policy,
-  scenarios,
   scopeSchema,
   targetSchema,
+  type EvidenceEvent,
 } from "../../../packages/core/src/index";
 import { BolnaRuntime } from "./providers/bolna/runtime";
 import { db, transaction, withSystemDatabase } from "./database/client";
@@ -19,6 +19,9 @@ import {
   configurationHash,
   configurationIntegrity,
 } from "./campaigns/configuration";
+import { listFindings, pageQuerySchema } from "./findings/list";
+import { validationMessage } from "./http/validation";
+import { evidenceAvailability } from "./evidence/availability";
 import { publicSite } from "./http/public-site";
 import {
   authRouter,
@@ -41,7 +44,7 @@ const app = express();
 installHttpSecurity(app);
 app.use(express.json({ limit: "512kb" }));
 const uuid = z.uuid();
-const routeId = (id: unknown) => uuid.parse(id);
+const routeId = (id: unknown) => z.object({ id: uuid }).parse({ id }).id;
 app.use("/api", (_req, res, next) => {
   res.setHeader("Cache-Control", "no-store");
   next();
@@ -67,34 +70,23 @@ app.use("/api/auth", authRouter);
 app.use("/api", requireWorkspace);
 app.use("/api", evidenceRouter);
 app.get("/api/overview", async (req, res) => {
-  const limit = z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(100)
-    .parse(req.query.limit ?? 50);
-  const offset = z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(1000000)
-    .parse(req.query.offset ?? 0);
+  const { limit, offset } = pageQuerySchema.parse(req.query);
   const [targets, campaigns, runs, counts] = await Promise.all([
     db.query(
-      "SELECT id,name,transport,phone,authorization_reference,created_at FROM targets ORDER BY created_at DESC",
+      "SELECT id,name,transport,phone,authorization_reference,created_at FROM targets WHERE transport='pstn' ORDER BY created_at DESC",
     ),
     db.query(
-      "SELECT c.id,c.name,c.target_id,c.mode,c.scope,c.status,c.calls_used,c.created_at,t.name AS target_name FROM campaigns c JOIN targets t ON t.id=c.target_id ORDER BY c.created_at DESC,c.id DESC LIMIT $1 OFFSET $2",
+      "SELECT c.id,c.name,c.target_id,c.mode,c.scope,c.status,c.calls_used,c.created_at,t.name AS target_name FROM campaigns c JOIN targets t ON t.id=c.target_id WHERE c.mode='live' ORDER BY c.created_at DESC,c.id DESC LIMIT $1 OFFSET $2",
       [limit, offset],
     ),
     db.query(
-      "SELECT r.id,r.campaign_id,r.scenario,r.status,r.synthetic,r.verdict,r.review,r.created_at,c.name AS campaign_name,t.name AS target_name FROM runs r JOIN campaigns c ON c.id=r.campaign_id JOIN targets t ON t.id=c.target_id WHERE c.id IN (SELECT id FROM campaigns ORDER BY created_at DESC,id DESC LIMIT $1 OFFSET $2) ORDER BY r.created_at DESC",
+      "SELECT r.id,r.campaign_id,r.scenario,r.status,r.synthetic,r.verdict,r.review,r.created_at,c.name AS campaign_name,t.name AS target_name FROM runs r JOIN campaigns c ON c.id=r.campaign_id JOIN targets t ON t.id=c.target_id WHERE NOT r.synthetic AND c.id IN (SELECT id FROM campaigns WHERE mode='live' ORDER BY created_at DESC,id DESC LIMIT $1 OFFSET $2) ORDER BY r.created_at DESC",
       [limit, offset],
     ),
-    db.query(`SELECT (SELECT count(*) FROM campaigns)::int AS campaigns, count(*) FILTER (WHERE status='completed')::int AS runs, count(*)::int AS "totalRuns", count(*) FILTER (WHERE status IN ('queued','running','awaiting_evidence'))::int AS "activeRuns",
+    db.query(`SELECT (SELECT count(*) FROM campaigns WHERE mode='live')::int AS campaigns, count(*) FILTER (WHERE status='completed')::int AS runs, count(*)::int AS "totalRuns", count(*) FILTER (WHERE status IN ('queued','running','awaiting_evidence'))::int AS "activeRuns",
       count(*) FILTER (WHERE verdict->>'outcome'='violation')::int AS candidates,
       count(*) FILTER (WHERE verdict->>'tier'='backend_verified')::int AS "backendVerified",
-      count(*) FILTER (WHERE verdict->>'outcome'='violation' AND review='pending')::int AS "pendingFindings" FROM runs`),
+      count(*) FILTER (WHERE verdict->>'outcome'='violation' AND review='pending')::int AS "pendingFindings" FROM runs WHERE NOT synthetic`),
   ]);
   const summary = counts.rows[0];
   res.json({
@@ -112,8 +104,16 @@ app.get("/api/overview", async (req, res) => {
     live: liveReadiness(),
   });
 });
+app.get("/api/findings", async (req, res) =>
+  res.json(await listFindings(req.query)),
+);
 app.post("/api/targets", async (req, res) => {
   const t = targetSchema.parse(req.body);
+  if (t.transport !== "pstn")
+    return res.status(400).json({
+      error:
+        "Register an authorized phone target to capture real call evidence",
+    });
   if (t.transport === "pstn") {
     if (!t.phone) throw new Error("PSTN targets require an E.164 phone number");
     const allowed = (process.env.AUTHORIZED_PHONE_NUMBERS ?? "")
@@ -137,7 +137,7 @@ const campaignSchema = z
     name: z.string().trim().min(3).max(100),
     targetId: z.uuid(),
     scope: scopeSchema,
-    mode: z.enum(["fixture", "live"]).optional(),
+    mode: z.literal("live").optional(),
   })
   .strict();
 app.post("/api/campaigns", async (req, res) => {
@@ -148,35 +148,12 @@ app.post("/api/campaigns", async (req, res) => {
     ])
   ).rows[0];
   if (!target) return res.status(404).json({ error: "Target not found" });
-  const mode =
-    input.mode ?? (target.transport === "fixture" ? "fixture" : "live");
-  if ((mode === "fixture") !== (target.transport === "fixture"))
-    return res.status(400).json({
-      error: "Campaign mode must match the selected target transport",
-    });
+  const mode = "live";
+  if (target.transport !== "pstn")
+    return res.status(400).json({ error: "Select an authorized phone target" });
   if (Date.parse(input.scope.endsAt) <= Date.now())
     throw new Error("The test window has already expired");
-  const config =
-    mode === "live"
-      ? await captureLiveConfiguration(target, input.scope)
-      : {
-          version: 1,
-          mode: "fixture",
-          policy,
-          target: {
-            id: target.id,
-            name: target.name,
-            transport: target.transport,
-            authorizationReference: target.authorization_reference,
-          },
-          scope: input.scope,
-          scenarios,
-          runtime: {
-            provider: "vouch-fixture",
-            apiFlavor: "fixture-v1",
-            model: "vouch-fixture-state-machine@1",
-          },
-        };
+  const config = await captureLiveConfiguration(target, input.scope);
   const output = await transaction(async (c) => {
     const t = (
       await c.query("SELECT * FROM targets WHERE id=$1 FOR SHARE", [
@@ -210,7 +187,7 @@ app.post("/api/campaigns", async (req, res) => {
     for (const scenario of ["benign_control", "false_authority"])
       await c.query(
         "INSERT INTO runs(id,campaign_id,scenario,config,synthetic) VALUES($1,$2,$3,$4,$5)",
-        [randomUUID(), id, scenario, config, mode === "fixture"],
+        [randomUUID(), id, scenario, config, false],
       );
     return { id, configHash, configHashAlgorithm: CONFIG_HASH_ALGORITHM };
   });
@@ -236,13 +213,16 @@ app.get("/api/runs/:id", async (req, res) => {
   const id = routeId(req.params.id);
   const r = (
     await db.query(
-      "SELECT r.*,c.name AS campaign_name,c.config_hash,c.config_hash_algorithm,t.name AS target_name FROM runs r JOIN campaigns c ON c.id=r.campaign_id JOIN targets t ON t.id=c.target_id WHERE r.id=$1",
+      "SELECT r.*,c.name AS campaign_name,c.status AS campaign_status,c.calls_used,c.scope,c.config_hash,c.config_hash_algorithm,t.name AS target_name FROM runs r JOIN campaigns c ON c.id=r.campaign_id JOIN targets t ON t.id=c.target_id WHERE r.id=$1 AND NOT r.synthetic",
       [id],
     )
   ).rows[0];
   if (!r) return res.status(404).json({ error: "Run not found" });
   const events = (
-    await db.query("SELECT * FROM events WHERE run_id=$1 ORDER BY seq", [id])
+    await db.query<EvidenceEvent>(
+      "SELECT * FROM events WHERE run_id=$1 ORDER BY seq",
+      [id],
+    )
   ).rows;
   const reviews = (
     await db.query(
@@ -263,6 +243,8 @@ app.get("/api/runs/:id", async (req, res) => {
   ]);
   res.json({
     ...r,
+    remainingSlots: Math.max(0, r.scope.maxCalls - r.calls_used),
+    ...evidenceAvailability(events, { synthetic: r.synthetic }),
     artifacts,
     liveExecution: liveExecution.rows[0] ?? null,
     config_integrity: configurationIntegrity(
@@ -276,13 +258,11 @@ app.get("/api/runs/:id", async (req, res) => {
       available: artifacts.length > 0,
       redacted: privacy.rows[0]?.recording_redacted ?? false,
       transcriptRedacted: privacy.rows[0]?.transcript_redacted ?? false,
-      reason: r.synthetic
-        ? "Synthetic fixture: no live call recording. Transcript replay uses browser speech synthesis."
-        : privacy.rows[0]?.recording_redacted
-          ? "Recording discarded by the workspace owner"
-          : artifacts.length
-            ? "Actual provider recording archived securely"
-            : "Recording not ingested",
+      reason: privacy.rows[0]?.recording_redacted
+        ? "Recording discarded by the workspace owner"
+        : artifacts.length
+          ? "Actual provider recording archived securely"
+          : "Recording not ingested",
     },
   });
 });
@@ -296,8 +276,12 @@ app.post("/api/runs/:id/review", async (req, res) => {
     .parse(req.body);
   const id = routeId(req.params.id);
   await transaction(async (c) => {
-    const r = (await c.query("SELECT * FROM runs WHERE id=$1 FOR UPDATE", [id]))
-      .rows[0];
+    const r = (
+      await c.query(
+        "SELECT * FROM runs WHERE id=$1 AND NOT synthetic FOR UPDATE",
+        [id],
+      )
+    ).rows[0];
     if (!r) throw Object.assign(new Error("Run not found"), { status: 404 });
     if (
       !["completed", "failed", "cancelled"].includes(r.status) ||
@@ -326,6 +310,8 @@ app.post("/api/runs/:id/rerun", async (req, res) => {
     ).rows[0];
     if (!original)
       throw Object.assign(new Error("Run not found"), { status: 404 });
+    if (original.synthetic)
+      throw new Error("Archived simulated runs cannot be rerun");
     if (original.campaign_status === "stopped")
       throw new Error(
         "Campaign was stopped. Register a new authorized campaign to continue.",
@@ -364,13 +350,16 @@ app.get("/api/runs/:id/export", async (req, res) => {
   const id = routeId(req.params.id);
   const r = (
     await db.query(
-      "SELECT r.*,c.config_hash,c.config_hash_algorithm FROM runs r JOIN campaigns c ON c.id=r.campaign_id WHERE r.id=$1",
+      "SELECT r.*,c.config_hash,c.config_hash_algorithm FROM runs r JOIN campaigns c ON c.id=r.campaign_id WHERE r.id=$1 AND NOT r.synthetic",
       [id],
     )
   ).rows[0];
   if (!r) return res.status(404).json({ error: "Run not found" });
   const events = (
-    await db.query("SELECT * FROM events WHERE run_id=$1 ORDER BY seq", [id])
+    await db.query<EvidenceEvent>(
+      "SELECT * FROM events WHERE run_id=$1 ORDER BY seq",
+      [id],
+    )
   ).rows;
   const reviews = (
     await db.query(
@@ -378,6 +367,10 @@ app.get("/api/runs/:id/export", async (req, res) => {
       [id],
     )
   ).rows;
+  if (!evidenceAvailability(events, { synthetic: r.synthetic }).exportReady)
+    return res.status(409).json({
+      error: "Export is available after the run has captured call evidence",
+    });
   const artifacts = await listRunArtifacts(id);
   const capturedPolicy = capturedPolicySchema.parse(r.config.policy);
   res.attachment(`vouch-${id.slice(0, 8)}-regression.v1.json`).json({
@@ -461,12 +454,15 @@ function applicationFailure(error: unknown): ErrorResponse {
   if (error instanceof z.ZodError)
     return {
       status: 400,
-      message: error.issues
-        .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-        .join("; "),
+      message: validationMessage(error),
     };
-  if (error instanceof Error && "status" in error && error.status === 404)
-    return { status: 404, message: error.message };
+  if (
+    error instanceof Error &&
+    "status" in error &&
+    typeof error.status === "number" &&
+    [400, 401, 403, 404, 409, 410, 413, 429, 500, 503].includes(error.status)
+  )
+    return { status: error.status, message: error.message };
   if (isDatabaseError(error))
     return { status: 500, message: "Database operation failed" };
   return {

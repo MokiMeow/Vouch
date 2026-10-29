@@ -1,6 +1,7 @@
 import ts from "typescript";
 import {
   existsSync,
+  cpSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -93,4 +94,9 @@ function walk(directory) {
   }
 }
 walk(output);
+cpSync(
+  resolve(root, "apps/api/src/database/migrations"),
+  resolve(output, "apps/api/src/database/migrations"),
+  { recursive: true },
+);
 console.log("Production server compiled with explicit native ESM imports");

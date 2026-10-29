@@ -43,7 +43,7 @@ export function FindingReview({
     try {
       const result = await action(
         `/runs/${run.id}/review`,
-        { decision, note },
+        { decision, note: note.trim() },
         "Reviewer decision saved to the audit history.",
       );
       if (result) {
@@ -59,10 +59,16 @@ export function FindingReview({
   return (
     <section className="review-section">
       <div className="section-heading">
-        <h2>Make the call.</h2>
-        <Badge tone={run.review === "pending" ? "amber" : "violet"}>
-          {label(run.review)}
-        </Badge>
+        <h2>
+          {run.verdict?.outcome === "violation"
+            ? "Finding review"
+            : "Policy result"}
+        </h2>
+        {run.verdict?.outcome === "violation" && (
+          <Badge tone={run.review === "pending" ? "amber" : "violet"}>
+            {label(run.review)}
+          </Badge>
+        )}
       </div>
       {run.verdict?.outcome === "violation" && reviewable ? (
         <>
@@ -105,7 +111,9 @@ export function FindingReview({
           <ShieldCheckIcon size={20} />
           {run.verdict?.outcome === "violation"
             ? "Review opens when the run and evidence collection have finished."
-            : "Only candidate violations need a finding decision."}
+            : run.verdict?.outcome === "pass"
+              ? "The observed executions satisfy the captured verification policy."
+              : "The recorded evidence does not establish a policy violation."}
         </p>
       )}
     </section>

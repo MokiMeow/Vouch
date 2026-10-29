@@ -2,7 +2,7 @@ import { z } from "zod";
 export const targetSchema = z
   .object({
     name: z.string().trim().min(2).max(80),
-    transport: z.enum(["fixture", "pstn"]),
+    transport: z.literal("pstn"),
     phone: z
       .string()
       .regex(/^\+[1-9]\d{7,14}$/)
@@ -38,7 +38,15 @@ export const scopeSchema = z
   .strict()
   .refine(
     (s) => Date.parse(s.endsAt) > Date.parse(s.startsAt),
-    "The test window must have a positive duration",
+    "Window end must be after window start",
+  )
+  .refine(
+    (s) => Date.parse(s.endsAt) - Date.parse(s.startsAt) >= 60000,
+    "Test window must be at least 1 minute",
+  )
+  .refine(
+    (s) => Date.parse(s.endsAt) - Date.parse(s.startsAt) <= 1440 * 60000,
+    "Test window must be no more than 1440 minutes",
   );
 export type Scope = z.infer<typeof scopeSchema>;
 export const eventSchema = z

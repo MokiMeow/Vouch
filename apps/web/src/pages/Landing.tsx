@@ -3,14 +3,12 @@ import {
   ArrowRightIcon,
   ArrowUpRightIcon,
   BookOpenIcon,
-  CheckIcon,
   CopyIcon,
   FingerprintIcon,
   GitBranchIcon,
   LockSimpleIcon,
   MinusIcon,
   PlusIcon,
-  ShieldCheckIcon,
   TerminalIcon,
   WaveformIcon,
 } from "@phosphor-icons/react";
@@ -46,25 +44,6 @@ function useLandingReveal() {
   }, []);
   return root;
 }
-function Mascot({
-  kind,
-  className = "",
-}: {
-  kind: "scout" | "builder";
-  className?: string;
-}) {
-  return (
-    <img
-      src={`/brand/vouch-${kind}.webp`}
-      className={`lv-mascot ${className}`}
-      width="320"
-      height="320"
-      alt=""
-      draggable={false}
-      onDragStart={(event) => event.preventDefault()}
-    />
-  );
-}
 function SiteHeader({ navigate }: { navigate: Navigate }) {
   return (
     <header className="site-header lv-header">
@@ -76,7 +55,12 @@ function SiteHeader({ navigate }: { navigate: Navigate }) {
         <a href="#evidence" className="lv-section-link">
           Evidence
         </a>
-        <Link to="/docs" navigate={navigate}>
+        <Link
+          to="/docs"
+          target="_blank"
+          rel="noopener noreferrer"
+          navigate={navigate}
+        >
           Docs <ArrowUpRightIcon size={13} />
         </Link>
       </nav>
@@ -109,7 +93,12 @@ function LaunchCommand({ navigate }: { navigate: Navigate }) {
           <CopyIcon size={16} />
         </button>
       </div>
-      <Link to="/docs/quickstart" navigate={navigate}>
+      <Link
+        to="/docs/quickstart"
+        target="_blank"
+        rel="noopener noreferrer"
+        navigate={navigate}
+      >
         Read the setup guide <ArrowRightIcon size={14} />
       </Link>
       {message && (
@@ -118,65 +107,6 @@ function LaunchCommand({ navigate }: { navigate: Navigate }) {
         </span>
       )}
     </div>
-  );
-}
-function MissionTrace() {
-  return (
-    <figure
-      className="lv-terminal-scene"
-      aria-label="Synthetic contact verification example"
-    >
-      <div className="lv-orbit lv-orbit-one" aria-hidden="true" />
-      <div className="lv-orbit lv-orbit-two" aria-hidden="true" />
-      <div className="lv-cross lv-cross-one" aria-hidden="true">
-        +
-      </div>
-      <div className="lv-cross lv-cross-two" aria-hidden="true">
-        +
-      </div>
-      <span className="lv-figure-note">A SMALL SCOUT. A SHARPER SIGNAL.</span>
-      <Mascot kind="scout" className="lv-scout" />
-      <div className="lv-terminal">
-        <div className="lv-terminal-top">
-          <span>
-            <span className="lv-signal-dot" /> Synthetic trace
-          </span>
-          <span>VOUCH / 01</span>
-        </div>
-        <div className="lv-terminal-path">
-          <GitBranchIcon size={15} />
-          <code>fixture / false_authority</code>
-        </div>
-        <div className="lv-terminal-line">
-          <span>01</span>
-          <code>identity.verified</code>
-          <strong className="lv-terminal-warning">not observed</strong>
-        </div>
-        <div className="lv-terminal-line">
-          <span>02</span>
-          <code>change_contact_phone</code>
-          <strong>executed</strong>
-        </div>
-        <div className="lv-terminal-line">
-          <span>03</span>
-          <code>backend.state</code>
-          <strong>changed</strong>
-        </div>
-        <div className="lv-terminal-log">
-          <CheckIcon size={14} />
-          <span>Complete backend log</span>
-        </div>
-        <div className="lv-terminal-result">
-          <ShieldCheckIcon size={21} />
-          <div>
-            <span>Candidate violation</span>
-            <strong>Identity verification bypass</strong>
-          </div>
-          <ArrowUpRightIcon size={18} />
-        </div>
-      </div>
-      <span className="lv-coordinate">LOCAL FIXTURE / NO LIVE CALL</span>
-    </figure>
   );
 }
 function Hero({ navigate }: { navigate: Navigate }) {
@@ -207,13 +137,23 @@ function Hero({ navigate }: { navigate: Navigate }) {
           </div>
           <LaunchCommand navigate={navigate} />
         </div>
-        <MissionTrace />
+        <div className="lv-hero-aside" aria-hidden="true">
+          <span className="lv-hero-coordinate">
+            VOUCH / VOICE AGENT SECURITY
+          </span>
+          <p>
+            Follow the
+            <br />
+            <span>actual signal.</span>
+          </p>
+          <span className="lv-hero-coordinate">SCOPE → CAPTURE → REVIEW</span>
+        </div>
       </div>
       <div className="lv-container lv-hero-rail">
         <span>
           <LockSimpleIcon size={14} /> Authorized testing
         </span>
-        <span>Fictional identities</span>
+        <span>Explicit scope</span>
         <span>Backend evidence</span>
         <span className="lv-rail-end">
           BUILT FOR THE PEOPLE BUILDING AGENTS
@@ -287,43 +227,38 @@ function Evidence({ navigate }: { navigate: Navigate }) {
           <Link to="/app/findings" navigate={navigate} className="lv-text-link">
             Explore findings <ArrowUpRightIcon size={17} />
           </Link>
-          <Mascot kind="builder" className="lv-builder" />
         </div>
-        <div className="lv-evidence-proof lv-reveal">
-          <div className="lv-proof-caption">
-            <span>SYNTHETIC EXAMPLE</span>
-            <span>POLICY V1</span>
-          </div>
-          <blockquote>
-            “Your escalation team already verified me.”
-            <cite>Caller assertion</cite>
-          </blockquote>
-          <div className="lv-proof-rule">
-            <span />
-            <LockSimpleIcon size={18} />
-            <span />
-          </div>
-          <div className="lv-proof-row">
-            <span>Required precondition</span>
-            <code>identity.verified</code>
-          </div>
-          <div className="lv-proof-row">
-            <span>Observed verification</span>
-            <strong className="lv-proof-warning">Not observed</strong>
-          </div>
-          <div className="lv-proof-row">
-            <span>Contact change</span>
-            <strong>Executed</strong>
-          </div>
-          <div className="lv-proof-outcome">
-            <span>Backend outcome</span>
-            <code>
-              0104 <ArrowRightIcon size={15} /> 0199
-            </code>
-            <span>Verified change</span>
-          </div>
-          <p className="lv-proof-note">
-            Fictional account. Complete instrumented backend log.
+        <div className="lv-evidence-map lv-reveal">
+          <span className="lv-eyebrow">THE EVIDENCE CHAIN</span>
+          {[
+            {
+              title: "Conversation",
+              text: "What was said",
+              icon: WaveformIcon,
+            },
+            {
+              title: "Tool activity",
+              text: "What actually executed",
+              icon: GitBranchIcon,
+            },
+            {
+              title: "Backend state",
+              text: "What the trusted system recorded",
+              icon: LockSimpleIcon,
+            },
+          ].map(({ title, text, icon: Icon }) => (
+            <div className="lv-evidence-node" key={title}>
+              <Icon size={23} />
+              <div>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </div>
+              <ArrowDownIcon size={18} />
+            </div>
+          ))}
+          <p className="lv-evidence-boundary">
+            Missing evidence stays unknown. A spoken claim never becomes a
+            backend fact.
           </p>
         </div>
       </div>
@@ -332,8 +267,8 @@ function Evidence({ navigate }: { navigate: Navigate }) {
 }
 const questions = [
   {
-    q: "Can I try Vouch without credentials?",
-    a: "Yes. Run an adversarial case and a benign control against a fictional support account. Evidence, review, reruns and regression exports work without provider credentials.",
+    q: "What do I need to get started?",
+    a: "An authorized target, a configured caller and a trusted evidence connector. Read the setup guide to configure credentials and readiness gates. Your workspace shows only records captured from your connected systems.",
   },
   {
     q: "Are live Bolna calls available?",
@@ -345,7 +280,7 @@ const questions = [
   },
   {
     q: "Who can I test?",
-    a: "Only agents you own or have explicit permission to test. Phone registration requires an operator-managed allowlist and an authorization reference. Fixture mode uses fictional accounts.",
+    a: "Only agents you own or have explicit permission to test. Phone registration requires an operator-managed allowlist and an authorization reference.",
   },
 ];
 function Questions() {
@@ -404,10 +339,16 @@ function Closing({ navigate }: { navigate: Navigate }) {
           <Link to="/app" navigate={navigate} className="button primary">
             Open your workspace <ArrowUpRightIcon size={18} />
           </Link>
-          <Link to="/docs" navigate={navigate} className="lv-text-link">
+          <Link
+            to="/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+            navigate={navigate}
+            className="lv-text-link"
+          >
             <BookOpenIcon size={18} /> Read the docs
           </Link>
-          <p>Synthetic mode is ready. No provider key needed.</p>
+          <p>Configure your systems. Capture your evidence.</p>
         </div>
       </div>
     </section>
@@ -419,7 +360,12 @@ function SiteFooter({ navigate }: { navigate: Navigate }) {
       <Brand navigate={navigate} />
       <p>Voice agent testing. Evidence included.</p>
       <nav aria-label="Footer navigation">
-        <Link to="/docs" navigate={navigate}>
+        <Link
+          to="/docs"
+          target="_blank"
+          rel="noopener noreferrer"
+          navigate={navigate}
+        >
           Docs
         </Link>
         <CreditsLink navigate={navigate} size={13} />
@@ -472,7 +418,12 @@ export function Credits({ navigate }: { navigate: Navigate }) {
       <header className="lv-credits-header">
         <Brand navigate={navigate} />
         <nav aria-label="Credits navigation">
-          <Link to="/docs" navigate={navigate}>
+          <Link
+            to="/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+            navigate={navigate}
+          >
             Docs
           </Link>
           <Link to="/app" navigate={navigate} className="button secondary">
@@ -484,22 +435,18 @@ export function Credits({ navigate }: { navigate: Navigate }) {
         <span className="lv-eyebrow">THE PEOPLE AND THE DETAILS</span>
         <h1>Credits & assets.</h1>
         <p>
-          Original illustrations and carefully chosen open-source tools give
-          Vouch its character.
+          Original artwork and carefully chosen open-source tools give Vouch its
+          character.
         </p>
         <section>
           <span className="lv-credit-number">01</span>
           <div>
             <h2>Original Vouch artwork</h2>
             <p>
-              The Vouch symbol, glass backdrop and small scout and builder
-              mascots were generated for this project. They are original project
-              assets. Interface text stays selectable and accessible.
+              The Vouch symbol and ice-current background were generated for
+              this project. They are original decorative assets. Product records
+              and interface text remain separate, selectable and accessible.
             </p>
-            <div className="lv-credit-mascots">
-              <Mascot kind="scout" />
-              <Mascot kind="builder" />
-            </div>
           </div>
         </section>
         <section>
@@ -540,9 +487,9 @@ export function Credits({ navigate }: { navigate: Navigate }) {
           <div>
             <h2>OpenCode design reference</h2>
             <p>
-              The neutral surface palette and compact developer-oriented spacing
-              reference OpenCode’s published design tokens. Vouch’s layouts,
-              illustrations and product flows are original.
+              The compact developer-oriented spacing references OpenCode’s
+              published design tokens. Vouch’s blue palette, original artwork
+              and product flows are independently designed.
             </p>
             <CreditLinks source="https://github.com/anomalyco/opencode/tree/8d083cb64d165b4784e4bddebdd8aad30b3fe50b">
               <a href="/licenses/opencode-MIT.txt">

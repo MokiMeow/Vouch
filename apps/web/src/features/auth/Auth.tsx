@@ -108,16 +108,6 @@ export function AuthGate({
           </div>
         )}
       </main>
-      <div className="auth-art" aria-hidden="true">
-        <img
-          src="/brand/vouch-builder.webp"
-          alt=""
-          width="220"
-          height="220"
-          draggable={false}
-          onDragStart={(event) => event.preventDefault()}
-        />
-      </div>
     </div>
   );
 }
@@ -133,7 +123,7 @@ function LoginForm({ onSession }: { onSession: SessionChange }) {
     try {
       onSession(
         await api("/auth/login", {
-          email: form.get("email"),
+          email: String(form.get("email") ?? "").trim(),
           password: form.get("password"),
         }),
       );
@@ -226,7 +216,7 @@ export function SessionControls({
     return (
       <span className="workspace-mode">
         <span className="status-dot" />
-        Local sandbox
+        Local workspace
       </span>
     );
   return (

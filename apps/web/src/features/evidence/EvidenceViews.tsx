@@ -4,12 +4,10 @@ import {
   HeadphonesIcon,
   InfoIcon,
   LockSimpleIcon,
-  PauseIcon,
-  PlayIcon,
   ShieldCheckIcon,
   WaveformIcon,
 } from "@phosphor-icons/react";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import type { CapturedPolicy } from "../../../../../packages/core/src/schemas";
 import { api, ApiError, label } from "../../shared/lib";
 import { useWorkspaceSession } from "../auth/Auth";
@@ -20,90 +18,6 @@ import type {
   Verdict,
 } from "../../shared/types";
 import { Badge } from "../../shared/ui/Primitives";
-function useSpeech(transcript: EvidenceEvent[]) {
-  const [playing, setPlaying] = useState(false),
-    [message, setMessage] = useState("");
-  useEffect(() => () => window.speechSynthesis?.cancel(), []);
-  function speak() {
-    if (playing) {
-      window.speechSynthesis.cancel();
-      setPlaying(false);
-      return;
-    }
-    if (!window.speechSynthesis) {
-      setMessage(
-        "Speech synthesis is unavailable. The complete transcript is below.",
-      );
-      return;
-    }
-    if (!window.speechSynthesis.getVoices().length) {
-      setMessage(
-        "No local speech voices are installed. The complete synthetic transcript is below.",
-      );
-      return;
-    }
-    setPlaying(true);
-    transcript.forEach((event, i) => {
-      const utterance = new SpeechSynthesisUtterance(
-        String(event.data.text ?? ""),
-      );
-      utterance.rate = 1.05;
-      utterance.onerror = () => {
-        setPlaying(false);
-        setMessage("Speech replay is unavailable in this browser.");
-      };
-      if (i === transcript.length - 1)
-        utterance.onend = () => setPlaying(false);
-      window.speechSynthesis.speak(utterance);
-    });
-  }
-  return { playing, message, speak };
-}
-function AudioPlayer({ transcript }: { transcript: EvidenceEvent[] }) {
-  const { playing, message, speak } = useSpeech(transcript);
-  return (
-    <>
-      <div className="audio-player">
-        <button
-          className="audio-play"
-          onClick={speak}
-          disabled={!transcript.length}
-          aria-label={
-            playing
-              ? "Stop synthetic speech replay"
-              : "Replay transcript with synthetic speech"
-          }
-        >
-          {playing ? (
-            <PauseIcon size={21} weight="fill" />
-          ) : (
-            <PlayIcon size={21} weight="fill" />
-          )}
-        </button>
-        <div>
-          <strong>Transcript replay · synthetic voice</strong>
-          <span>Browser speech · not a call recording</span>
-        </div>
-        <div className={`wave ${playing ? "playing" : ""}`} aria-hidden="true">
-          {Array.from({ length: 35 }, (_, i) => (
-            <i
-              key={i}
-              style={{
-                height: `${8 + ((i * 17 + 7) % 24)}px`,
-                animationDelay: `${i * 0.03}s`,
-              }}
-            />
-          ))}
-        </div>
-      </div>
-      {message && (
-        <p role="status" className="speech-note">
-          {message}
-        </p>
-      )}
-    </>
-  );
-}
 function Utterance({
   event,
   callerLabel,
@@ -112,6 +26,18 @@ function Utterance({
   callerLabel: string;
 }) {
   const caller = event.source === "caller";
+  const providerTranscript =
+    event.data.format === "provider_transcript" ||
+    event.source === "provider" ||
+    event.data.timestampGranularity === "execution";
+  if (providerTranscript)
+    return (
+      <article className="provider-transcript">
+        <h3>Provider transcript</h3>
+        <p className="muted small">Speaker timing was not supplied.</p>
+        <p className="transcript-text">{String(event.data.text ?? "")}</p>
+      </article>
+    );
   return (
     <article className={`utterance ${caller ? "caller" : ""}`}>
       <span className="speaker-avatar">
@@ -119,8 +45,16 @@ function Utterance({
       </span>
       <div>
         <div className="speaker">
-          <strong>{caller ? callerLabel : "Support agent"}</strong>
-          <time>{String(Math.floor(event.at / 1000)).padStart(2, "0")}s</time>
+          <strong>
+            {caller
+              ? callerLabel
+              : event.source === "target"
+                ? "Target agent"
+                : "Transcript observation"}
+          </strong>
+          {event.data.timestampKnown !== false && (
+            <time>{Math.floor(event.at / 1000)}s</time>
+          )}
         </div>
         <p>{String(event.data.text ?? "")}</p>
       </div>
@@ -173,7 +107,13 @@ function Timeline({ events }: { events: EvidenceEvent[] }) {
           key={e.id}
         >
           <span className="timeline-dot" />
-          <time>{Math.floor(e.at / 1000)}s</time>
+          <time>
+            {e.source === "provider" ||
+            e.data.timestampKnown === false ||
+            e.data.timestampGranularity === "execution"
+              ? "Provider observation"
+              : `${Math.floor(e.at / 1000)}s`}
+          </time>
           <div>
             <div className="timeline-title">
               <strong>{label(e.kind)}</strong>
@@ -225,13 +165,9 @@ export function ConversationSection({
           <span className="eyebrow">01 / THE CONVERSATION</span>
           <h2>Every word, in context.</h2>
         </div>
-        <Badge>{run.synthetic ? "Synthetic" : "Provider evidence"}</Badge>
+        <Badge>Provider evidence</Badge>
       </div>
-      {run.synthetic ? (
-        <AudioPlayer transcript={transcript} />
-      ) : (
-        <RecordedAudio run={run} onUpdate={onUpdate} />
-      )}
+      <RecordedAudio run={run} onUpdate={onUpdate} />
       <div className="tabs" role="tablist" aria-label="Evidence views">
         {tabs.map((tab, i) => (
           <button
@@ -265,13 +201,7 @@ export function ConversationSection({
     </section>
   );
 }
-function StateChange({
-  event,
-  synthetic,
-}: {
-  event: EvidenceEvent;
-  synthetic: boolean;
-}) {
+function StateChange({ event }: { event: EvidenceEvent }) {
   return (
     <div className="state-diff">
       <div>
@@ -292,20 +222,12 @@ function StateChange({
       </div>
       <p>
         <ShieldCheckIcon size={17} />
-        {synthetic
-          ? "Independently read from PostgreSQL · fictional account"
-          : "Reported by the target's backend evidence connector"}
+        Reported by the target’s signed backend evidence connector
       </p>
     </div>
   );
 }
-export function BackendSection({
-  events,
-  synthetic,
-}: {
-  events: EvidenceEvent[];
-  synthetic: boolean;
-}) {
+export function BackendSection({ events }: { events: EvidenceEvent[] }) {
   const states = events.filter(
     (e) => e.kind === "backend.state" && e.source === "backend",
   );
@@ -319,9 +241,7 @@ export function BackendSection({
         <CodeIcon size={23} weight="light" />
       </div>
       {states.length ? (
-        states.map((e) => (
-          <StateChange event={e} synthetic={synthetic} key={e.id} />
-        ))
+        states.map((e) => <StateChange event={e} key={e.id} />)
       ) : (
         <p className="empty-evidence">
           Backend state evidence is unknown. No side effect is inferred from the
@@ -410,7 +330,7 @@ function RecordedAudio({ run, onUpdate }: { run: Run; onUpdate: () => void }) {
         <p className="empty-evidence">
           {recordingRedacted(run)
             ? "The recording was permanently discarded. Future recording recovery is disabled."
-            : "No call recording is available. Provider audio is never replaced with synthetic speech."}
+            : "No provider call recording is available yet."}
         </p>
         <RetryRecording run={run} onUpdate={onUpdate} />
       </div>

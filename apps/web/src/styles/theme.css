@@ -1,0 +1,864 @@
+/* The selected ice-current visual direction. Load after feature styles. */
+:root {
+  --surface-base: #f4f8fc;
+}
+body {
+  color: var(--vouch-ink);
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+[role="tabpanel"]:focus-visible {
+  outline-color: #2563eb;
+}
+.button.primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+.button.secondary:hover,
+.button.ghost:hover {
+  background: #e9f2ff;
+  border-color: #adc7e7;
+}
+.icon-button:hover {
+  background: #e4effe;
+  color: #1d4ed8;
+}
+.search-field:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px #2563eb14;
+}
+.search-field input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.modal {
+  box-shadow: 0 24px 100px #10243a29;
+}
+body .workspace-app {
+  --workspace-paper: #ffffff;
+  --workspace-ink: #10243a;
+  --workspace-muted: #526982;
+  --workspace-rule: #d1dfeb;
+  position: relative;
+  isolation: isolate;
+  background: #f4f8fc;
+}
+body .workspace-app::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: clamp(420px, 36vw, 560px);
+  background: url("/brand/vouch-current.webp") center top / cover no-repeat;
+  opacity: 0.42;
+  pointer-events: none;
+  z-index: -1;
+}
+body .workspace-app .workspace-header {
+  min-height: 82px;
+  padding: 16px 4%;
+  border-color: #d1dfeb;
+  background: #ffffffb8;
+  backdrop-filter: blur(22px);
+}
+body .workspace-app .workspace-nav {
+  gap: 10px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+body .workspace-app .workspace-nav > a {
+  min-height: 49px;
+  padding: 13px 12px;
+  border-radius: 6px 6px 0 0;
+  color: #38536f;
+  font-size: 14px;
+}
+body .workspace-app .workspace-nav > a:hover {
+  color: #1d4ed8;
+}
+body .workspace-app .workspace-nav > a[aria-current="page"] {
+  color: #10243a;
+}
+body .workspace-app .nav-glider {
+  top: auto;
+  bottom: 0;
+  height: 2px;
+  border: 0;
+  border-radius: 1px;
+  background: #2563eb;
+  box-shadow: none;
+}
+body .workspace-app .workspace-nav > a > .nav-count {
+  background: #e4eeff;
+  color: #1d4ed8;
+}
+body .workspace-app .workspace-main {
+  width: min(1600px, calc(100% - 112px));
+  padding-top: 38px;
+}
+body .workspace-app .workspace-date {
+  margin-bottom: 27px;
+  font-size: 11px;
+}
+body .workspace-app .workspace-date > span:last-child {
+  font-size: 11px;
+}
+body .workspace-app .page-heading {
+  margin-bottom: 32px;
+}
+body .workspace-app .page-heading h1 {
+  font-size: clamp(34px, 3.6vw, 56px);
+  line-height: 1.1;
+  font-weight: 500;
+}
+body .workspace-app .page-heading p {
+  font-size: 16px;
+  color: #3f5a76;
+  max-width: 62ch;
+}
+body .workspace-app .page-heading .eyebrow {
+  font-size: 11px;
+}
+body .workspace-app .button {
+  font-size: 14px;
+  min-height: 44px;
+  border-radius: 9px;
+}
+body .workspace-app .button.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  box-shadow: 0 3px 12px #2563eb14;
+}
+body .workspace-app .button.primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  box-shadow: 0 5px 15px #2563eb24;
+}
+body .workspace-app .button.secondary {
+  color: #10243a;
+  background: #ffffffc9;
+  border-color: #c7d8e8;
+}
+body .workspace-app .button.secondary:hover {
+  background: #e8f1ff;
+  border-color: #a6c3e7;
+}
+body .workspace-app .workspace-docs-shortcut {
+  background: #ffffffb8;
+  border-color: #cbddeb;
+  border-radius: 9px;
+}
+body .workspace-app .workspace-docs-shortcut:hover {
+  background: #e6efff;
+  border-color: #9dbcec;
+}
+body .workspace-app .mission-intro,
+body .workspace-app .mission-intro.is-compact {
+  display: block;
+  min-height: 0;
+  padding: 26px 30px;
+  border: 1px solid #cbddeb;
+  border-radius: 14px;
+  background: #ffffffb8;
+}
+body .workspace-app .mission-intro h2,
+body .workspace-app .mission-intro.is-compact h2 {
+  max-width: none;
+  margin: 14px 0 20px;
+  font-size: 33px;
+}
+body .workspace-app .mission-intro h2 span,
+body .workspace-app .mission-intro.is-compact h2 span {
+  color: #42678c;
+}
+body .workspace-app .mission-eyebrow,
+body .workspace-app .mission-spec,
+body .workspace-app .mission-guide {
+  color: #45617c;
+}
+body .workspace-app .mission-guide:hover,
+body .workspace-app .review-doc-link:hover {
+  color: #1d4ed8;
+}
+body .workspace-app .mission-art {
+  display: none;
+}
+body .workspace-app .mission-spec {
+  padding-bottom: 0;
+  margin-top: 18px;
+  font-size: 10px;
+}
+body .workspace-app .mission-trace {
+  margin: 22px 0 0;
+  padding: 18px 0 0;
+  background: transparent;
+  border-color: #ccdeed;
+  color: #42617d;
+}
+body .workspace-app .mission-trace code {
+  color: #294d70;
+}
+body .workspace-app .metric-strip {
+  margin: 32px 0 35px;
+  padding-bottom: 22px;
+  border-color: #c8dae9;
+}
+body .workspace-app .metric {
+  padding-bottom: 0;
+  border-color: #d1dfeb;
+}
+body .workspace-app .metric > span {
+  font-family: Geist, sans-serif;
+  font-size: 13px;
+}
+body .workspace-app .metric > strong {
+  font-size: 40px;
+  margin: 10px 0 5px;
+}
+body .workspace-app .metric > p {
+  font-size: 13px;
+}
+body .workspace-app .metric.warning > strong {
+  color: #915414;
+}
+body .workspace-app .section-heading .eyebrow,
+body .workspace-app .activity-section .section-heading .eyebrow,
+body .workspace-app .review-queue .section-heading .eyebrow {
+  color: #526982;
+  font-size: 10px;
+}
+body .workspace-app .section-heading h2 {
+  font-size: 23px;
+}
+body .workspace-app .campaign-list-header,
+body .workspace-app .campaign-list-header > span {
+  color: #526982;
+  font-size: 10px;
+}
+body .workspace-app .campaign-row {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  text-align: left;
+  background: transparent;
+  transition:
+    background 180ms ease,
+    color 180ms ease;
+}
+body .workspace-app .campaign-entry {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  border-bottom: 1px solid #d1dfeb;
+}
+body .workspace-app .campaign-entry:hover {
+  background: #ffffffa8;
+}
+body .workspace-app .campaign-entry .campaign-row:hover {
+  background: transparent;
+}
+body .workspace-app .campaign-stop {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid #dfb1b1;
+  border-radius: 7px;
+  background: #fff8f8e8;
+  color: #a83232;
+  font-size: 12px;
+}
+body .workspace-app .campaign-stop:hover {
+  border-color: #bc6969;
+  background: #ffe9e9;
+}
+body .workspace-app .campaign-row:hover,
+body .workspace-app .finding-row:hover,
+body .workspace-app .target-row:hover {
+  background: #ffffffa8;
+}
+body .workspace-app .row-title:hover {
+  color: #1d4ed8;
+}
+body .workspace-app .campaign-name p {
+  font-size: 12px;
+}
+body .workspace-app .campaign-findings {
+  color: #8a5415;
+  font-size: 12px;
+}
+body .workspace-app .campaign-count > span {
+  color: #29445e;
+  font-size: 13px;
+}
+body .workspace-app .campaign-count small {
+  font-size: 11px;
+}
+body .workspace-app .campaign-symbol,
+body .workspace-app .finding-symbol {
+  color: #426c96;
+}
+body .workspace-app .campaign-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+body .workspace-app .review-queue {
+  border-color: #c7d9e9;
+}
+body .workspace-app .badge {
+  min-height: 24px;
+  padding: 5px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+}
+body .workspace-app .badge.violet {
+  color: #1d4ed8;
+  border-color: #bed4ff;
+  background: #e6efff;
+}
+body .workspace-app .badge.amber {
+  color: #875411;
+  border-color: #efd9ae;
+  background: #fff4df;
+}
+body .workspace-app .badge.red {
+  color: #a83232;
+  border-color: #f4cccc;
+  background: #ffeded;
+}
+body .workspace-app .list-toolbar {
+  padding: 0 0 24px;
+}
+body .workspace-app .search-field {
+  background: #ffffffc4;
+  border-color: #bdcfe2;
+  border-radius: 9px;
+  min-height: 44px;
+}
+body .workspace-app .search-field input {
+  font-size: 14px;
+  color: #10243a;
+}
+body .workspace-app .filter-field select {
+  background-color: #ffffffc4;
+  border-color: #c9d9e8;
+  border-radius: 9px;
+  font-size: 13px;
+  min-height: 44px;
+}
+body .workspace-app .filter-field select:hover {
+  border-color: #9ab9dd;
+}
+body .workspace-app .empty-state {
+  padding: 55px 24px;
+  background: #ffffffa8;
+  border: 1px solid #d1dfeb;
+  border-radius: 12px;
+}
+body .workspace-app .empty-state h3 {
+  color: #10243a;
+}
+body .workspace-app .empty-state p {
+  color: #526982;
+  font-size: 14px;
+}
+body .workspace-app .empty-mark {
+  background: #e7f0ff;
+  color: #2563eb;
+}
+body .workspace-app .workspace-footer {
+  border-color: #cbddeb;
+  font-size: 11px;
+}
+body .workspace-app .integration-monogram {
+  background: #e0ecff;
+  color: #1d4ed8;
+}
+body .workspace-app .connection-boundary {
+  background: #ffffffb8;
+  border-color: #c7d9eb;
+}
+body .workspace-app .run-detail .tabs button.selected {
+  color: #1d4ed8;
+  border-color: #2563eb;
+}
+body .workspace-app .run-detail .audio-player {
+  background: #e8f1fe;
+}
+body .workspace-app .run-detail .audio-play {
+  background: #2563eb;
+}
+body .workspace-app .run-detail .raw-events {
+  background: #10243a;
+  color: #e2edff;
+}
+body .workspace-app .run-detail .speaker-avatar {
+  background: #e1edff;
+  color: #1d4ed8;
+}
+body .workspace-app .run-detail .caller p {
+  border-color: #b4cff4;
+}
+body .workspace-app .run-detail .review-section textarea {
+  background: #ffffffd9;
+  color: #10243a;
+  border-color: #b8cde2;
+}
+.docs-app {
+  background: #f4f8fc;
+}
+.docs-app .docs-header {
+  background: #ffffffc9;
+  border-color: #d1dfeb;
+}
+.docs-app .docs-navigation {
+  border-color: #d1dfeb;
+}
+.docs-app .docs-search {
+  background: #ffffffd9;
+  border-color: #c8d9e9;
+  border-radius: 8px;
+}
+.docs-app .docs-search:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px #2563eb14;
+}
+.docs-app .docs-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border: 0;
+}
+.docs-app .docs-nav-group > span {
+  color: #526982;
+}
+.docs-app .docs-nav-group > a:hover {
+  background: #e9f1fd;
+  color: #1d4ed8;
+}
+.docs-app .docs-nav-group > a.is-active {
+  background: #e3edff;
+  color: #1d4ed8;
+}
+.docs-app .docs-no-results button {
+  color: #1d4ed8;
+}
+.docs-app .docs-article-meta {
+  color: #526982;
+}
+.docs-app .docs-title-row h1 {
+  color: #10243a;
+}
+.docs-app .docs-title-row {
+  padding-bottom: 7px;
+}
+.docs-app .docs-lead {
+  color: #526982;
+}
+.docs-app .docs-live-dot {
+  background: #2563eb;
+}
+.docs-app .docs-sections p,
+.docs-app .docs-sections li {
+  color: #405c76;
+}
+.docs-app .docs-section-heading > a,
+.docs-app .docs-section-heading > span {
+  color: #536f8d;
+}
+.docs-app .docs-sections p code,
+.docs-app .docs-sections li code,
+.docs-app .docs-table-scroll code {
+  background: #e7effa;
+  color: #1d4f89;
+}
+.docs-app .docs-sections li::marker {
+  color: #2563eb;
+}
+.docs-app .docs-code {
+  background: #10243a;
+  border-color: #27425c;
+  border-radius: 10px;
+}
+.docs-app .docs-code figcaption {
+  color: #dbe9fa;
+  border-color: #36506a;
+}
+.docs-app .docs-code figcaption small {
+  color: #b3c9e2;
+}
+.docs-app .docs-code figcaption button {
+  color: #e3eeff;
+}
+.docs-app .docs-code figcaption button:hover {
+  background: #254565;
+  border-color: #587da3;
+}
+.docs-app .docs-code pre {
+  color: #e3eeff;
+  font-size: 12px;
+}
+.docs-app .docs-copy-status {
+  color: #bad4ff;
+}
+.docs-app .docs-note {
+  background: #e9f1ff;
+  border-color: #6e9df1;
+  border-radius: 0 8px 8px 0;
+}
+.docs-app .docs-note > svg {
+  color: #2563eb;
+}
+.docs-app .docs-note strong {
+  color: #244e81;
+}
+.docs-app .docs-note p {
+  color: #456582;
+}
+.docs-app .docs-note.warning {
+  background: #fff6e7;
+  border-color: #c39855;
+}
+.docs-app .docs-note.warning > svg {
+  color: #916316;
+}
+.docs-app .docs-note.warning strong {
+  color: #775016;
+}
+.docs-app .docs-note.warning p {
+  color: #776144;
+}
+.docs-app .docs-table-scroll td {
+  color: #45617e;
+  border-color: #d6e2ef;
+}
+.docs-app .docs-table-scroll td:first-child {
+  color: #294c70;
+}
+.docs-app .docs-contents a {
+  color: #526982;
+}
+.docs-app .docs-contents a.is-active {
+  color: #1d4ed8;
+  border-color: #2563eb;
+}
+.docs-app .docs-related a:hover {
+  color: #1d4ed8;
+}
+.docs-app .docs-footer a:hover {
+  color: #1d4ed8;
+}
+.auth-page {
+  background-color: #f4f8fc;
+  background-image: url("/brand/vouch-current.webp");
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-size: max(100%, 1440px) auto;
+}
+.auth-page > header {
+  background: #ffffffb8;
+  border-color: #d1dfeb;
+  backdrop-filter: blur(20px);
+}
+.auth-page > header > a {
+  color: #3d5e7b;
+}
+.auth-main {
+  max-width: 590px;
+  padding-top: clamp(65px, 10vh, 120px);
+}
+.auth-main h1 {
+  color: #10243a;
+}
+.auth-main h1 span {
+  color: #2563eb;
+}
+.auth-login {
+  padding: 28px;
+  border: 1px solid #cbddec;
+  border-radius: 14px;
+  background: #ffffffd9;
+  backdrop-filter: blur(18px);
+}
+.auth-art {
+  display: none;
+}
+.auth-page .setup-form {
+  padding: 0;
+}
+.auth-page .setup-form input {
+  background: #f8fbff;
+}
+.auth-page .form-intro {
+  color: #526982;
+}
+.auth-page .button.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+.auth-page .button.primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+.session-controls > select {
+  color: #294b69;
+}
+.session-error {
+  background: #fff0ed;
+  color: #9b352d;
+  border: 1px solid #f1cbc6;
+}
+.account-settings details,
+.history-pagination,
+.workspace-members li,
+.execution-reconciliation,
+.evidence-privacy,
+.live-execution,
+.connector-setup {
+  border-color: #d1dfeb;
+}
+.history-pagination > span,
+.live-execution dt,
+.execution-reconciliation p,
+.evidence-privacy p {
+  color: #526982;
+}
+.connector-setup pre {
+  color: #244a6e;
+  background: #e8f0fb;
+  font-size: 12px;
+}
+@media (max-width: 1200px) {
+  body .workspace-app .workspace-header {
+    gap: 14px;
+    padding-inline: 28px;
+  }
+  body .workspace-app .workspace-nav {
+    gap: 1px;
+  }
+  body .workspace-app .workspace-nav > a {
+    padding-inline: 10px;
+    font-size: 13px;
+  }
+  body .workspace-app .workspace-main {
+    width: calc(100% - 64px);
+  }
+}
+@media (max-width: 900px) {
+  body .workspace-app .workspace-header {
+    grid-template-columns: 1fr auto;
+    padding: 12px 28px 0;
+  }
+  body .workspace-app .workspace-nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+    justify-content: flex-start;
+    overflow-x: auto;
+    gap: 6px;
+  }
+  body .workspace-app .workspace-identity {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  body .workspace-app .workspace-nav > a {
+    flex: 0 0 auto;
+  }
+  body .workspace-app .overview-grid {
+    grid-template-columns: 1fr;
+  }
+  body .workspace-app .review-queue {
+    border-left: 0;
+    border-top: 1px solid #c7d9e9;
+    padding: 25px 0 0;
+    margin-top: 32px;
+  }
+  body .workspace-app .page-heading {
+    align-items: flex-start;
+  }
+}
+@media (max-width: 640px) {
+  body .workspace-app::before {
+    height: 420px;
+    opacity: 0.35;
+    background-position: 38% top;
+  }
+  body .workspace-app .workspace-header {
+    padding: 12px 20px 0;
+    gap: 8px;
+  }
+  body .workspace-app .workspace-header .brand {
+    font-size: 26px;
+  }
+  body .workspace-app .workspace-header .brand img {
+    width: 38px;
+    height: 38px;
+  }
+  body .workspace-app .workspace-main {
+    width: calc(100% - 40px);
+    padding-top: 30px;
+  }
+  body .workspace-app .workspace-nav {
+    margin: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 0;
+    gap: 3px;
+    scrollbar-color: #7fa7dc #e8f0fa;
+    scrollbar-width: thin;
+  }
+  body .workspace-app .workspace-nav::-webkit-scrollbar {
+    height: 3px;
+    display: block;
+  }
+  body .workspace-app .workspace-nav::-webkit-scrollbar-thumb {
+    background: #7fa7dc;
+  }
+  body .workspace-app .workspace-nav::-webkit-scrollbar-track {
+    background: #e8f0fa;
+  }
+  body .workspace-app .workspace-nav > a {
+    padding: 12px 10px;
+    min-height: 44px;
+    font-size: 13px;
+  }
+  body .workspace-app .workspace-mode {
+    font-size: 11px;
+  }
+  body .workspace-app .page-heading {
+    display: block;
+    margin-bottom: 26px;
+  }
+  body .workspace-app .page-heading h1 {
+    font-size: clamp(33px, 8.5vw, 44px);
+  }
+  body .workspace-app .page-heading p {
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  body .workspace-app .page-heading > .button {
+    margin-top: 23px;
+  }
+  body .workspace-app .workspace-date {
+    font-size: 10px;
+    gap: 12px;
+  }
+  body .workspace-app .workspace-date > span:last-child {
+    font-size: 10px;
+  }
+  body .workspace-app .mission-intro,
+  body .workspace-app .mission-intro.is-compact {
+    padding: 22px 20px;
+  }
+  body .workspace-app .mission-intro h2,
+  body .workspace-app .mission-intro.is-compact h2 {
+    font-size: 28px;
+    max-width: none;
+    margin: 13px 0 20px;
+  }
+  body .workspace-app .mission-spec {
+    font-size: 10px;
+    gap: 12px;
+  }
+  body .workspace-app .metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 29px 0 32px;
+    padding-bottom: 0;
+  }
+  body .workspace-app .metric {
+    padding: 18px 0 20px 18px;
+    border-bottom: 1px solid #d1dfeb;
+  }
+  body .workspace-app .metric:nth-child(odd) {
+    border-right: 1px solid #d1dfeb;
+    padding-left: 0;
+  }
+  body .workspace-app .metric:nth-child(even) {
+    border-right: 0;
+  }
+  body .workspace-app .metric:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+  body .workspace-app .metric > span {
+    font-size: 12px;
+  }
+  body .workspace-app .metric > strong {
+    font-size: 35px;
+  }
+  body .workspace-app .metric > p {
+    font-size: 12px;
+  }
+  body .workspace-app .campaign-entry {
+    flex-wrap: wrap;
+    gap: 0;
+    padding-bottom: 0;
+  }
+  body .workspace-app .campaign-row {
+    flex: 1 1 100%;
+    border-bottom: 0;
+    grid-template-columns: minmax(0, 1fr) 24px;
+  }
+  body .workspace-app .campaign-stop {
+    margin: 0 0 18px 33px;
+    min-height: 40px;
+  }
+  body .workspace-app .campaign-status {
+    margin-left: 33px;
+  }
+  body .workspace-app .campaign-name p {
+    font-size: 12px;
+  }
+  body .workspace-app .campaign-count small {
+    font-size: 11px;
+  }
+  body .workspace-app .finding-description > span {
+    font-size: 12px;
+  }
+  body .workspace-app .finding-review {
+    font-size: 11px;
+  }
+  body .workspace-app .target-description p,
+  body .workspace-app .integration-content > p {
+    font-size: 14px;
+  }
+  body .workspace-app .filter-field select {
+    font-size: 13px;
+  }
+  body .workspace-app .empty-state {
+    padding: 36px 18px;
+  }
+  .docs-app .docs-navigation {
+    background: #f4f8fcf7;
+  }
+  .docs-app .docs-mobile-button {
+    color: #244e76;
+  }
+  .auth-main {
+    padding-top: 55px;
+  }
+  .auth-login {
+    padding: 22px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.mission-trace:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 4px;
+}

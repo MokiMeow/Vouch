@@ -11,7 +11,6 @@ import express, {
   type Response,
   type NextFunction,
 } from "express";
-import type { PoolClient } from "pg";
 import { z } from "zod";
 import {
   db,
@@ -171,17 +170,13 @@ function clearSessionCookie(res: Response) {
 function localSession(): AuthSession {
   const workspace: Workspace = {
     id: LOCAL_WORKSPACE_ID,
-    name: "Local workspace",
+    name: "Development workspace",
     role: "owner",
   };
   return {
     mode: "local",
     authenticated: true,
-    user: {
-      id: LOCAL_WORKSPACE_ID,
-      email: "developer@localhost",
-      name: "Local developer",
-    },
+    user: null,
     workspace,
     workspaces: [workspace],
     csrfToken: null,
@@ -599,145 +594,4 @@ export async function purgeExpiredSessions(): Promise<number> {
     );
     return result.rowCount ?? 0;
   });
-}
-
-const directTables = ["targets", "campaigns", "runs", "live_executions"];
-const inheritedTables: Record<string, string> = {
-  events: "run_id",
-  accounts: "run_id",
-  reviews: "run_id",
-  evidence_streams: "run_id",
-  evidence_receipts: "run_id",
-  provider_evidence_cursors: "run_id",
-  artifacts: "run_id",
-};
-async function tableExists(c: PoolClient, name: string) {
-  return !!(await c.query("SELECT to_regclass($1) AS name", [name])).rows[0]
-    .name;
-}
-export async function applyTenantPolicies(
-  c: PoolClient,
-  extraTables: string[] = [],
-) {
-  const direct = [...new Set([...directTables, ...extraTables])];
-  const tenantTables: string[] = [];
-  for (const table of direct) {
-    if (!/^[a-z_]+$/.test(table)) throw new Error("Invalid tenant table name");
-    if (!(await tableExists(c, table))) continue;
-    tenantTables.push(table);
-    await c.query(
-      `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS workspace_id uuid`,
-    );
-    if (table === "runs")
-      await c.query(
-        "UPDATE runs r SET workspace_id=c.workspace_id FROM campaigns c WHERE c.id=r.campaign_id AND r.workspace_id IS NULL",
-      );
-    if (table === "campaigns")
-      await c.query(
-        "UPDATE campaigns c SET workspace_id=t.workspace_id FROM targets t WHERE t.id=c.target_id AND c.workspace_id IS NULL",
-      );
-    if (table === "live_executions")
-      await c.query(
-        "UPDATE live_executions e SET workspace_id=r.workspace_id FROM runs r WHERE r.id=e.run_id AND e.workspace_id IS NULL",
-      );
-    await c.query(
-      `UPDATE ${table} SET workspace_id=$1 WHERE workspace_id IS NULL`,
-      [LOCAL_WORKSPACE_ID],
-    );
-    await c.query(
-      `ALTER TABLE ${table} ALTER COLUMN workspace_id SET NOT NULL, ALTER COLUMN workspace_id SET DEFAULT NULLIF(current_setting('vouch.workspace_id',true),'')::uuid`,
-    );
-    await c.query(
-      `CREATE INDEX IF NOT EXISTS ${table}_workspace ON ${table}(workspace_id)`,
-    );
-    await c.query(`DO $$ BEGIN
-      IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='${table}_workspace_fk' AND conrelid='${table}'::regclass)
-      THEN ALTER TABLE ${table} ADD CONSTRAINT ${table}_workspace_fk FOREIGN KEY(workspace_id) REFERENCES vouch_workspaces(id); END IF;
-    END $$`);
-    await c.query(
-      `ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY; ALTER TABLE ${table} FORCE ROW LEVEL SECURITY; DROP POLICY IF EXISTS workspace_boundary ON ${table}`,
-    );
-    const condition =
-      "current_setting('vouch.system',true)='on' OR workspace_id=NULLIF(current_setting('vouch.workspace_id',true),'')::uuid";
-    await c.query(
-      `CREATE POLICY workspace_boundary ON ${table} USING (${condition}) WITH CHECK (${condition})`,
-    );
-  }
-  for (const [table, column] of Object.entries(inheritedTables)) {
-    if (!(await tableExists(c, table))) continue;
-    tenantTables.push(table);
-    await c.query(
-      `ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY; ALTER TABLE ${table} FORCE ROW LEVEL SECURITY; DROP POLICY IF EXISTS workspace_boundary ON ${table}`,
-    );
-    const condition = `current_setting('vouch.system',true)='on' OR EXISTS(SELECT 1 FROM runs r WHERE r.id=${table}.${column} AND r.workspace_id=NULLIF(current_setting('vouch.workspace_id',true),'')::uuid)`;
-    await c.query(
-      `CREATE POLICY workspace_boundary ON ${table} USING (${condition}) WITH CHECK (${condition})`,
-    );
-  }
-  // Same-workspace composite references prevent cross-tenant FK insertion even
-  // when a caller learns another workspace's UUID.
-  await c.query(
-    "CREATE UNIQUE INDEX IF NOT EXISTS targets_id_workspace ON targets(id,workspace_id); CREATE UNIQUE INDEX IF NOT EXISTS campaigns_id_workspace ON campaigns(id,workspace_id); CREATE UNIQUE INDEX IF NOT EXISTS runs_id_workspace ON runs(id,workspace_id)",
-  );
-  await c.query(`DO $$ BEGIN
-    IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='campaign_target_workspace') THEN ALTER TABLE campaigns ADD CONSTRAINT campaign_target_workspace FOREIGN KEY(target_id,workspace_id) REFERENCES targets(id,workspace_id); END IF;
-    IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='run_campaign_workspace') THEN ALTER TABLE runs ADD CONSTRAINT run_campaign_workspace FOREIGN KEY(campaign_id,workspace_id) REFERENCES campaigns(id,workspace_id); END IF;
-  END $$`);
-  if (await tableExists(c, "live_executions"))
-    await c.query(`DO $$ BEGIN
-      IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='execution_run_workspace' AND conrelid='live_executions'::regclass)
-      THEN ALTER TABLE live_executions ADD CONSTRAINT execution_run_workspace FOREIGN KEY(run_id,workspace_id) REFERENCES runs(id,workspace_id); END IF;
-    END $$`);
-  await c.query("GRANT USAGE ON SCHEMA public TO vouch_runtime");
-  if (tenantTables.length)
-    await c.query(
-      `GRANT SELECT,INSERT,UPDATE,DELETE ON ${tenantTables.join(",")} TO vouch_runtime`,
-    );
-  await c.query(
-    "REVOKE ALL ON vouch_users,vouch_sessions,vouch_memberships,vouch_workspaces FROM vouch_runtime",
-  );
-}
-export async function migrateAuth(c: PoolClient) {
-  await c.query(`
-CREATE TABLE IF NOT EXISTS vouch_workspaces(id uuid PRIMARY KEY,name text NOT NULL,created_at timestamptz NOT NULL DEFAULT now());
-CREATE TABLE IF NOT EXISTS vouch_users(id uuid PRIMARY KEY,email text NOT NULL UNIQUE,name text NOT NULL,password_hash text NOT NULL,disabled boolean NOT NULL DEFAULT false,created_at timestamptz NOT NULL DEFAULT now());
-CREATE TABLE IF NOT EXISTS vouch_memberships(user_id uuid NOT NULL REFERENCES vouch_users(id) ON DELETE CASCADE,workspace_id uuid NOT NULL REFERENCES vouch_workspaces(id) ON DELETE CASCADE,role text NOT NULL CHECK(role IN ('owner','member')),created_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(user_id,workspace_id));
-CREATE TABLE IF NOT EXISTS vouch_sessions(token_hash text PRIMARY KEY,user_id uuid NOT NULL REFERENCES vouch_users(id) ON DELETE CASCADE,workspace_id uuid NOT NULL REFERENCES vouch_workspaces(id) ON DELETE CASCADE,expires_at timestamptz NOT NULL,created_at timestamptz NOT NULL DEFAULT now());
-CREATE INDEX IF NOT EXISTS vouch_sessions_expiry ON vouch_sessions(expires_at);
-DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='vouch_runtime') THEN CREATE ROLE vouch_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; END IF; END $$;
-`);
-  const runtimeRole = (
-    await c.query(
-      "SELECT rolsuper,rolbypassrls,rolcreaterole,rolcreatedb,rolcanlogin,rolinherit FROM pg_roles WHERE rolname='vouch_runtime'",
-    )
-  ).rows[0];
-  if (
-    !runtimeRole ||
-    runtimeRole.rolsuper ||
-    runtimeRole.rolbypassrls ||
-    runtimeRole.rolcreaterole ||
-    runtimeRole.rolcreatedb ||
-    runtimeRole.rolcanlogin ||
-    runtimeRole.rolinherit
-  )
-    throw new Error(
-      "vouch_runtime must be a restricted NOLOGIN role without RLS bypass or administrative privileges",
-    );
-  const inheritedMembership = (
-    await c.query(
-      "SELECT 1 FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles WHERE rolname='vouch_runtime') LIMIT 1",
-    )
-  ).rows[0];
-  if (inheritedMembership)
-    throw new Error(
-      "vouch_runtime cannot be a member of another database role",
-    );
-  await c.query(
-    "INSERT INTO vouch_workspaces(id,name) VALUES($1,'Local workspace') ON CONFLICT(id) DO NOTHING",
-    [LOCAL_WORKSPACE_ID],
-  );
-  const current = (await c.query("SELECT current_user AS name")).rows[0].name;
-  const identifier = '"' + String(current).replaceAll('"', '""') + '"';
-  await c.query(`GRANT vouch_runtime TO ${identifier}`);
-  await applyTenantPolicies(c);
 }

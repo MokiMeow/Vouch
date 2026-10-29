@@ -21,6 +21,7 @@ import {
   currentPolicySchema,
 } from "../campaigns/configuration";
 import { db, configureDatabaseClient } from "../database/client";
+import { readMigrationSql } from "../database/migration-source";
 import {
   evidenceReady,
   finalizeRunEvidence,
@@ -117,47 +118,9 @@ const ACTIVE_STATES = [
 ];
 
 export async function migrateLive(c: PoolClient) {
-  await c.query(`
-    CREATE TABLE IF NOT EXISTS live_executions (
-      run_id uuid PRIMARY KEY REFERENCES runs(id) ON DELETE CASCADE,
-      workspace_id uuid NOT NULL,
-      state text NOT NULL DEFAULT 'prepared',
-      request_key uuid NOT NULL UNIQUE,
-      caller_agent_id text,
-      provider_execution_id text UNIQUE,
-      currency text NOT NULL DEFAULT 'USD',
-      reserved_cents integer NOT NULL CHECK (reserved_cents >= 0),
-      settled_cents integer CHECK (settled_cents >= 0),
-      cancel_requested boolean NOT NULL DEFAULT false,
-      dispatch_started_at timestamptz,
-      deadline_at timestamptz,
-      carrier_limit_set_at timestamptz,
-      terminal_at timestamptz,
-      next_poll_at timestamptz NOT NULL DEFAULT now(),
-      last_snapshot jsonb,
-      last_error text,
-      cleanup_state text NOT NULL DEFAULT 'not_required',
-      cleanup_attempts integer NOT NULL DEFAULT 0,
-      cleanup_next_at timestamptz,
-      cleanup_error text,
-      caller_deleted_at timestamptz,
-      created_at timestamptz NOT NULL DEFAULT now(),
-      updated_at timestamptz NOT NULL DEFAULT now()
-    );
-    ALTER TABLE live_executions ADD COLUMN IF NOT EXISTS deadline_at timestamptz;
-    ALTER TABLE live_executions ADD COLUMN IF NOT EXISTS carrier_limit_set_at timestamptz;
-    ALTER TABLE live_executions ADD COLUMN IF NOT EXISTS cleanup_state text NOT NULL DEFAULT 'not_required';
-    ALTER TABLE live_executions ADD COLUMN IF NOT EXISTS cleanup_attempts integer NOT NULL DEFAULT 0;
-    ALTER TABLE live_executions ADD COLUMN IF NOT EXISTS cleanup_next_at timestamptz;
-    ALTER TABLE live_executions ADD COLUMN IF NOT EXISTS cleanup_error text;
-    ALTER TABLE live_executions ADD COLUMN IF NOT EXISTS caller_deleted_at timestamptz;
-    UPDATE live_executions SET cleanup_state='pending',cleanup_next_at=now()
-      WHERE caller_agent_id IS NOT NULL AND caller_deleted_at IS NULL AND cleanup_state='not_required'
-        AND state IN ('completed','cancelled','failed') AND settled_cents IS NOT NULL;
-
-    CREATE INDEX IF NOT EXISTS live_execution_state ON live_executions(state,next_poll_at);
-  `);
+  await c.query(await readMigrationSql("002_live.sql"));
 }
+
 function configuredInteger(name: string, minimum: number, maximum: number) {
   const raw = process.env[name];
   if (!raw || !/^\d+$/.test(raw)) return null;
@@ -355,6 +318,10 @@ function assertProviderControls(runtime: RuntimeSnapshot) {
     );
 }
 function validatedConfiguration(job: LiveJob): LiveConfiguration {
+  if (job.synthetic)
+    throw new Error(
+      "Synthetic historical runs cannot execute through the live provider worker",
+    );
   if (job.config_hash_algorithm !== CONFIG_HASH_ALGORITHM)
     throw new Error(
       "Live execution requires a verifiable captured configuration",
@@ -494,7 +461,7 @@ async function reserveJob(c: PoolClient): Promise<boolean> {
     const result = await c.query<LiveJob>(
       `SELECT r.*,c.scope,c.config_hash,c.config_hash_algorithm,c.status AS campaign_status
        FROM runs r JOIN campaigns c ON c.id=r.campaign_id
-       WHERE r.status='queued' AND NOT r.synthetic
+       WHERE r.status='queued' AND NOT r.synthetic AND c.mode='live'
          AND CASE WHEN pg_input_is_valid(c.scope->>'startsAt','timestamptz')
            THEN (c.scope->>'startsAt')::timestamptz<=now() ELSE true END
        ORDER BY r.created_at,r.scenario LIMIT 1 FOR UPDATE OF r,c SKIP LOCKED`,
@@ -570,7 +537,7 @@ async function loadActive(c: PoolClient) {
     c,
     `SELECT r.*,c.scope,c.config_hash,c.config_hash_algorithm,c.status AS campaign_status,e.*
      FROM live_executions e JOIN runs r ON r.id=e.run_id JOIN campaigns c ON c.id=r.campaign_id
-     WHERE e.state=ANY($1::text[]) ORDER BY e.created_at LIMIT 1`,
+     WHERE e.state=ANY($1::text[]) AND NOT r.synthetic AND c.mode='live' ORDER BY e.created_at LIMIT 1`,
     [ACTIVE_STATES],
   );
   return result.rows[0];

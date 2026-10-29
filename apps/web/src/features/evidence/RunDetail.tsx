@@ -5,7 +5,7 @@ import {
   ShieldCheckIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, label, titleForRun, when } from "../../shared/lib";
 import type { Action, Run } from "../../shared/types";
 import {
@@ -64,14 +64,59 @@ function VerdictLine({ run }: { run: Run }) {
     </div>
   );
 }
+export function rerunAvailability(run: Run, now = Date.now()) {
+  const scope = run.scope ?? run.config.scope;
+  const providedSlots = run.remainingSlots,
+    usedCalls = run.calls_used;
+  const remainingSlots =
+    typeof providedSlots === "number" && Number.isInteger(providedSlots)
+      ? Math.max(0, providedSlots)
+      : scope && typeof usedCalls === "number" && Number.isInteger(usedCalls)
+        ? Math.max(0, scope.maxCalls - usedCalls)
+        : null;
+  const blocked = (reason: string) => ({
+    enabled: false,
+    reason,
+    remainingSlots,
+  });
+  if (run.campaign_status === "stopped")
+    return blocked(
+      "This campaign is stopped. Start a new authorized campaign.",
+    );
+  if (!run.campaign_status || remainingSlots === null || !scope)
+    return blocked("Refresh the run to load its current campaign scope.");
+  if (
+    ["mismatch", "unsupported_algorithm"].includes(run.config_integrity ?? "")
+  )
+    return blocked(
+      "The captured configuration cannot be rerun. Create a new campaign.",
+    );
+  if (remainingSlots === 0)
+    return blocked("No call slots remain. Start a new authorized campaign.");
+  const startsAt = Date.parse(scope.startsAt),
+    endsAt = Date.parse(scope.endsAt);
+  if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt))
+    return blocked(
+      "The authorized window is unavailable. Create a new campaign.",
+    );
+  if (now < startsAt)
+    return blocked("The authorized window has not started yet.");
+  if (now >= endsAt)
+    return blocked("The authorized window has ended. Start a new campaign.");
+  if (!["completed", "failed", "cancelled"].includes(run.status))
+    return blocked("Wait for this run and its evidence collection to finish.");
+  return { enabled: true, reason: "", remainingSlots };
+}
 function RunHeading({
   run,
   rerun,
   busy,
+  availability,
 }: {
   run: Run;
   rerun: () => void;
   busy: boolean;
+  availability: ReturnType<typeof rerunAvailability>;
 }) {
   return (
     <div className="page-heading detail-heading">
@@ -80,29 +125,45 @@ function RunHeading({
         <h1 tabIndex={-1}>{titleForRun(run)}</h1>
         <p>
           {run.target_name} <span className="separator">/</span>{" "}
-          {when(run.created_at)} <span className="separator">/</span>{" "}
-          {run.synthetic ? "Synthetic fixture" : "Provider evidence"}
+          {when(run.created_at)} <span className="separator">/</span> Provider
+          evidence
+        </p>
+        <p id="rerun-availability" className="run-scope-status">
+          {availability.remainingSlots === null
+            ? "Call slots unavailable"
+            : `${availability.remainingSlots} call ${availability.remainingSlots === 1 ? "slot" : "slots"} remaining`}
+          {availability.reason && ` · ${availability.reason}`}
         </p>
       </div>
       <div className="heading-actions">
         <button
           className="button secondary"
           onClick={rerun}
-          disabled={
-            busy || !["completed", "failed", "cancelled"].includes(run.status)
-          }
+          disabled={busy || !availability.enabled}
+          aria-describedby="rerun-availability"
         >
           <ArrowCounterClockwiseIcon size={17} />
           Rerun case
         </button>
-        <a
-          className="button primary"
-          href={`/api/runs/${run.id}/export`}
-          download
-        >
-          <FileCodeIcon size={17} />
-          Export regression
-        </a>
+        {run.exportReady === true && (run.events?.length ?? 0) > 0 ? (
+          <a
+            className="button primary"
+            href={`/api/runs/${run.id}/export`}
+            download
+          >
+            <FileCodeIcon size={17} />
+            Export regression
+          </a>
+        ) : (
+          <button
+            className="button primary"
+            disabled
+            title="Recorded evidence must be available before exporting a regression."
+          >
+            <FileCodeIcon size={17} />
+            Export not ready
+          </button>
+        )}
       </div>
     </div>
   );
@@ -118,16 +179,36 @@ export function RunDetail({
   onUpdate: () => void;
   action: Action;
 }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false),
+    [now, setNow] = useState(Date.now);
+  const scope = run.scope ?? run.config.scope;
+  useEffect(() => {
+    const boundaries = [
+      Date.parse(scope?.startsAt ?? ""),
+      Date.parse(scope?.endsAt ?? ""),
+    ].filter((boundary) => Number.isFinite(boundary) && boundary > now);
+    if (!boundaries.length) return;
+    const delay = Math.min(
+      2147483647,
+      Math.max(0, Math.min(...boundaries) - Date.now() + 1),
+    );
+    const timer = window.setTimeout(() => setNow(Date.now()), delay);
+    return () => window.clearTimeout(timer);
+  }, [scope?.startsAt, scope?.endsAt, now]);
+  const availability = rerunAvailability(run, now);
   async function rerun() {
-    if (busy) return;
+    if (busy || !rerunAvailability(run).enabled) {
+      setNow(Date.now());
+      return;
+    }
     setBusy(true);
     try {
-      await action(
+      const result = await action(
         `/runs/${run.id}/rerun`,
         {},
         "Same configuration queued. A call slot was reserved from the original scope.",
       );
+      if (result) await onUpdate();
     } finally {
       setBusy(false);
     }
@@ -138,17 +219,20 @@ export function RunDetail({
         <ArrowLeftIcon size={17} />
         Back to workspace
       </button>
-      <RunHeading run={run} rerun={rerun} busy={busy} />
+      <RunHeading
+        run={run}
+        rerun={rerun}
+        busy={busy}
+        availability={availability}
+      />
       <VerdictLine run={run} />
-      {!run.synthetic && (
-        <LiveExecutionPanel run={run} action={action} onUpdate={onUpdate} />
-      )}
+      <LiveExecutionPanel run={run} action={action} onUpdate={onUpdate} />
       <div className="detail-grid">
         <div className="evidence-main">
           <ConversationSection run={run} onUpdate={onUpdate} />
-          <BackendSection events={run.events ?? []} synthetic={run.synthetic} />
-          {!run.synthetic && <ConnectorSetup run={run} />}
-          {!run.synthetic && <EvidencePrivacy run={run} onUpdate={onUpdate} />}
+          <BackendSection events={run.events ?? []} />
+          <ConnectorSetup run={run} />
+          <EvidencePrivacy run={run} onUpdate={onUpdate} />
         </div>
         <aside className="evidence-aside">
           <PolicySection verdict={run.verdict} policy={run.config.policy} />

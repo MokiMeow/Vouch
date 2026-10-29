@@ -1,7 +1,9 @@
 import { db, transaction } from "../database/client";
 import { purgeRunArtifacts } from "../evidence/artifacts";
 
-const closedCampaign = `c.status IN ('completed','failed','stopped')
+const closedCampaign = `c.mode='live'
+  AND NOT EXISTS(SELECT 1 FROM runs legacy WHERE legacy.campaign_id=c.id AND legacy.synthetic)
+  AND c.status IN ('completed','failed','stopped')
   AND c.created_at<now()-($1::int*interval '1 day')
   AND NOT EXISTS (
     SELECT 1 FROM runs r WHERE r.campaign_id=c.id AND (
@@ -73,9 +75,6 @@ export async function purgeClosedCampaigns(
       // campaign for a later retry rather than orphaning encrypted recordings.
       await purgeRunArtifacts(ids, { client });
       await client.query("DELETE FROM reviews WHERE run_id=ANY($1::uuid[])", [
-        ids,
-      ]);
-      await client.query("DELETE FROM accounts WHERE run_id=ANY($1::uuid[])", [
         ids,
       ]);
       await client.query("DELETE FROM events WHERE run_id=ANY($1::uuid[])", [

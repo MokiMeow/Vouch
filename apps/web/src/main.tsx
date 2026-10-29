@@ -12,7 +12,16 @@ import { Docs } from "./pages/Docs";
 import type { Navigate } from "./shared/types";
 import "./styles/base.css";
 import "./styles/tokens.css";
-function Screen({ path, navigate }: { path: string; navigate: Navigate }) {
+import "./styles/theme.css";
+function Screen({
+  path,
+  location,
+  navigate,
+}: {
+  path: string;
+  location: string;
+  navigate: Navigate;
+}) {
   if (path === "/") return <Landing navigate={navigate} />;
   if (path === "/credits") return <Credits navigate={navigate} />;
   if (
@@ -33,6 +42,7 @@ function Screen({ path, navigate }: { path: string; navigate: Navigate }) {
           <Workspace
             key={session.workspace?.id ?? "local"}
             path={path}
+            location={location}
             navigate={navigate}
             session={session}
             onSessionChange={onSessionChange}
@@ -55,7 +65,10 @@ function Screen({ path, navigate }: { path: string; navigate: Navigate }) {
   );
 }
 function currentPath() {
-  return window.location.pathname.replace(/\/$/, "") || "/";
+  return (
+    (window.location.pathname.replace(/\/$/, "") || "/") +
+    window.location.search
+  );
 }
 function App() {
   const [path, setPath] = useState(currentPath);
@@ -64,12 +77,18 @@ function App() {
     window.addEventListener("popstate", change);
     return () => window.removeEventListener("popstate", change);
   }, []);
-  const navigate = useCallback((next: string) => {
-    if (window.location.pathname !== next) history.pushState({}, "", next);
+  const navigate = useCallback<Navigate>((next, options) => {
+    if (currentPath() !== next) {
+      if (options?.replace) history.replaceState({}, "", next);
+      else history.pushState({}, "", next);
+    }
     setPath(next);
-    window.scrollTo({ top: 0, behavior: "instant" });
+    if (options?.scroll !== false)
+      window.scrollTo({ top: 0, behavior: "instant" });
   }, []);
-  return <Screen path={path} navigate={navigate} />;
+  return (
+    <Screen path={path.split("?")[0]} location={path} navigate={navigate} />
+  );
 }
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
