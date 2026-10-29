@@ -5,12 +5,22 @@ import {
   ShieldCheckIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../../shared/lib";
 import type { Overview, Target } from "../../shared/types";
 
+import {
+  campaignPayload,
+  captureCampaignReview,
+  formValue,
+  reviewTargetAvailable,
+  type CampaignDraft,
+  type FormErrors,
+} from "./campaign-review";
+
 type FormType = "campaign" | "target";
-type Errors = Record<string, string>;
+type Errors = FormErrors;
+export type SetupResult = { type: FormType; id: string; initialRunId?: string };
 const copy = {
   campaign: {
     intro: "Set the approved target and limits before placing a call.",
@@ -27,97 +37,29 @@ const copy = {
     success: "Approved target registered.",
   },
 };
-const value = (form: FormData, name: string) =>
-  String(form.get(name) ?? "").trim();
-function validate(form: FormData, type: FormType, targets: Target[]): Errors {
-  const errors: Errors = {};
-  const name = value(form, "name");
-  const minimumName = type === "target" ? 2 : 3;
-  if (name.length < minimumName || name.length > 80)
-    errors.name = `Enter a name between ${minimumName} and 80 characters. Spaces alone do not count.`;
-  if (type === "target") {
-    if (!/^\+[1-9]\d{7,14}$/.test(value(form, "phone")))
-      errors.phone =
-        "Enter an international phone number starting with + and its country code.";
-    const reference = value(form, "reference");
-    if (reference.length < 5 || reference.length > 300)
-      errors.reference = "Describe your authorization in 5 to 300 characters.";
-    if (form.get("authorized") !== "on")
-      errors.authorized =
-        "Confirm that you are authorized to test this target.";
-    return errors;
-  }
-  if (
-    !targets.some(
-      (target) =>
-        target.id === value(form, "target") && target.transport === "pstn",
-    )
-  )
-    errors.target =
-      "Select an approved phone target. Register one before launching a campaign.";
-  for (const [field, minimum, maximum, caption] of [
-    ["maxCalls", 2, 20, "Maximum calls"],
-    ["duration", 40, 300, "Call duration"],
-    ["window", 1, 1440, "Authorized window"],
-  ] as const) {
-    const number = Number(value(form, field));
-    if (
-      !value(form, field) ||
-      !Number.isInteger(number) ||
-      number < minimum ||
-      number > maximum
-    )
-      errors[field] =
-        `${caption} must be a whole number between ${minimum} and ${maximum}.`;
-  }
-  const budget = Number(value(form, "budget"));
-  if (
-    !value(form, "budget") ||
-    !Number.isFinite(budget) ||
-    budget < 0 ||
-    budget > 100 ||
-    Math.abs(budget * 100 - Math.round(budget * 100)) > 0.000001
-  )
-    errors.budget =
-      "Enter a budget from 0 to 100 USD with no more than two decimal places.";
-  if (form.get("campaignAuthorized") !== "on")
-    errors.campaignAuthorized =
-      "Authorize this campaign within the displayed scope before launching.";
+function validateTarget(form: FormData): Errors {
+  const errors: Errors = {},
+    name = formValue(form, "name"),
+    reference = formValue(form, "reference");
+  if (name.length < 2 || name.length > 80)
+    errors.name =
+      "Enter a name between 2 and 80 characters. Spaces alone do not count.";
+  if (!/^\+[1-9]\d{7,14}$/.test(formValue(form, "phone")))
+    errors.phone =
+      "Enter an international phone number starting with + and its country code.";
+  if (reference.length < 5 || reference.length > 300)
+    errors.reference = "Describe your authorization in 5 to 300 characters.";
+  if (form.get("authorized") !== "on")
+    errors.authorized = "Confirm that you are authorized to test this target.";
   return errors;
 }
 function saveTarget(form: FormData) {
   return api("/targets", {
-    name: value(form, "name"),
+    name: formValue(form, "name"),
     transport: "pstn",
-    phone: value(form, "phone"),
+    phone: formValue(form, "phone"),
     authorized: form.get("authorized") === "on",
-    authorizationReference: value(form, "reference"),
-  });
-}
-function saveCampaign(form: FormData) {
-  const startsAt = Date.now() - 1000;
-  return api("/campaigns", {
-    name: value(form, "name"),
-    targetId: value(form, "target"),
-    mode: "live",
-    scope: {
-      startsAt: new Date(startsAt).toISOString(),
-      endsAt: new Date(
-        startsAt + Number(form.get("window")) * 60000,
-      ).toISOString(),
-      concurrency: 1,
-      maxCalls: Number(form.get("maxCalls")),
-      maxDurationSeconds: Number(form.get("duration")),
-      budgetCents: Math.round(Number(form.get("budget")) * 100),
-      syntheticIdentity: "Alex Morgan / SYN-1042",
-      categories: ["false_authority", "benign_control"],
-      prohibitedActions: [
-        "real_personal_data",
-        "real_payments",
-        "external_targets",
-      ],
-      stopOnFinding: form.get("stop") === "on",
-    },
+    authorizationReference: formValue(form, "reference"),
   });
 }
 function FieldError({ name, errors }: { name: string; errors: Errors }) {
@@ -133,43 +75,129 @@ function invalid(name: string, errors: Errors) {
     "aria-describedby": errors[name] ? `form-error-${name}` : undefined,
   };
 }
+function focusProblem(form: HTMLFormElement, errors: Errors) {
+  const field = form.elements.namedItem(Object.keys(errors)[0]);
+  if (field instanceof HTMLElement) field.focus();
+}
 export function SetupForm({
   type,
   targets,
   targetId,
   live,
   onSuccess,
+  onRegisterTarget,
+  onOpenIntegrations,
 }: {
   type: FormType;
   targets: Target[];
   targetId?: string;
   live?: Overview["live"];
-  onSuccess: (message: string) => void;
+  onSuccess: (message: string, result?: SetupResult) => void;
+  onRegisterTarget?: () => void;
+  onOpenIntegrations?: () => void;
 }) {
-  const [error, setError] = useState(""),
-    [errors, setErrors] = useState<Errors>({}),
-    [busy, setBusy] = useState(false);
-  const content = copy[type];
+  const [step, setStep] = useState<"scope" | "review">("scope"),
+    [draft, setDraft] = useState<CampaignDraft | null>(null);
+  const [authorized, setAuthorized] = useState(false),
+    [error, setError] = useState(""),
+    [errors, setErrors] = useState<Errors>({});
+  const [busy, setBusy] = useState(false),
+    [saved, setSaved] = useState(false);
+  const submitting = useRef(false),
+    completed = useRef(false),
+    heading = useRef<HTMLHeadingElement>(null),
+    errorPanel = useRef<HTMLDivElement>(null),
+    previousStep = useRef(step);
+  const content = copy[type],
+    campaign = type === "campaign",
+    reviewing = campaign && step === "review";
   const eligible = targets.filter((target) => target.transport === "pstn");
-  const blocked =
-    type === "campaign" && (!live?.enabled || eligible.length === 0);
+  const targetChanged = !!draft && !reviewTargetAvailable(draft, eligible);
+  const launchBlocked =
+    campaign && (!live?.enabled || !eligible.length || targetChanged);
+  useEffect(() => {
+    if (previousStep.current !== step) heading.current?.focus();
+    previousStep.current = step;
+  }, [step]);
+  useEffect(() => {
+    if (error) errorPanel.current?.focus();
+  }, [error]);
+  function back() {
+    if (submitting.current || completed.current) return;
+    setStep("scope");
+    setAuthorized(false);
+    setError("");
+    setErrors({});
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || blocked) return;
-    const element = event.currentTarget,
-      form = new FormData(element);
-    const problems = validate(form, type, targets);
+    if (submitting.current || completed.current) return;
+    const element = event.currentTarget;
     setError("");
-    setErrors(problems);
-    if (Object.keys(problems).length) {
-      const field = element.elements.namedItem(Object.keys(problems)[0]);
-      if (field instanceof HTMLElement) field.focus();
+    if (campaign && !reviewing) {
+      const capture = captureCampaignReview(new FormData(element), eligible);
+      setErrors(capture.errors);
+      if (!capture.draft) {
+        focusProblem(element, capture.errors);
+        return;
+      }
+      setDraft(capture.draft);
+      setAuthorized(false);
+      setStep("review");
       return;
     }
+    if (campaign && (launchBlocked || !draft)) {
+      setError(
+        targetChanged
+          ? "The approved target changed. Return to scope and review it again."
+          : (live?.reason ??
+              "Complete the integration and target setup before launching."),
+      );
+      return;
+    }
+    if (campaign && !authorized) {
+      const problems = {
+        campaignAuthorized: "Authorize the reviewed scope before launching.",
+      };
+      setErrors(problems);
+      focusProblem(element, problems);
+      return;
+    }
+    const form = new FormData(element);
+    if (!campaign) {
+      const problems = validateTarget(form);
+      setErrors(problems);
+      if (Object.keys(problems).length) {
+        focusProblem(element, problems);
+        return;
+      }
+    }
+    submitting.current = true;
     setBusy(true);
     try {
-      await (type === "target" ? saveTarget(form) : saveCampaign(form));
-      onSuccess(content.success);
+      const response =
+        campaign && draft
+          ? await api("/campaigns", campaignPayload(draft))
+          : await saveTarget(form);
+      completed.current = true;
+      setSaved(true);
+      const result: SetupResult | undefined =
+        typeof response?.id === "string"
+          ? {
+              type,
+              id: response.id,
+              ...(typeof response.initialRunId === "string"
+                ? { initialRunId: response.initialRunId }
+                : {}),
+            }
+          : undefined;
+      try {
+        await onSuccess(content.success, result);
+      } catch {
+        setError(
+          `${campaign ? "The campaign" : "The target"} was saved. Open the workspace to continue.`,
+        );
+      }
     } catch (error) {
       setError(
         error instanceof Error
@@ -177,9 +205,29 @@ export function SetupForm({
           : "The request could not be completed. Please try again.",
       );
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
+  if (campaign && !eligible.length)
+    return (
+      <section
+        className="setup-form campaign-prerequisites"
+        aria-label="Campaign setup prerequisites"
+      >
+        <h3>Add an approved target</h3>
+        <p>
+          Register a phone number you are authorized to test before creating a
+          campaign.
+        </p>
+        <Prerequisites
+          missingTarget
+          live={live}
+          onRegisterTarget={onRegisterTarget}
+          onOpenIntegrations={onOpenIntegrations}
+        />
+      </section>
+    );
   return (
     <form
       className="setup-form"
@@ -192,59 +240,236 @@ export function SetupForm({
         setError("");
       }}
     >
+      {campaign && (
+        <>
+          <ol className="campaign-steps" aria-label="Campaign setup steps">
+            <li aria-current={!reviewing ? "step" : undefined}>1 Scope</li>
+            <li aria-current={reviewing ? "step" : undefined}>
+              2 Review and launch
+            </li>
+          </ol>
+          <h3 ref={heading} tabIndex={-1}>
+            {reviewing ? "Review and launch" : "Set the scope"}
+          </h3>
+        </>
+      )}
       {error && (
-        <div className="inline-error" role="alert">
+        <div
+          className="inline-error"
+          role="alert"
+          ref={errorPanel}
+          tabIndex={-1}
+        >
           <WarningCircleIcon size={19} />
           {error}
         </div>
       )}
-      <p className="form-intro">{content.intro}</p>
-      {type === "campaign" && !live?.enabled && (
+      {campaign && !live?.enabled && (
+        <Prerequisites live={live} onOpenIntegrations={onOpenIntegrations} />
+      )}
+      {!reviewing && <p className="form-intro">{content.intro}</p>}
+      <fieldset
+        className="campaign-scope-fields"
+        hidden={reviewing}
+        disabled={reviewing || busy || saved}
+        aria-label={campaign ? "Campaign scope" : "Target registration"}
+      >
+        <label>
+          {content.label}
+          <input
+            autoFocus
+            name="name"
+            required
+            minLength={campaign ? 3 : 2}
+            maxLength={80}
+            placeholder={
+              campaign
+                ? "Name this authorized campaign"
+                : "Your approved support agent"
+            }
+            {...invalid("name", errors)}
+          />
+          <FieldError name="name" errors={errors} />
+        </label>
+        {campaign ? (
+          <CampaignFields
+            targets={eligible}
+            targetId={targetId}
+            errors={errors}
+          />
+        ) : (
+          <TargetFields errors={errors} />
+        )}
+      </fieldset>
+      {reviewing && draft && (
+        <>
+          <CampaignReview draft={draft} />
+          {targetChanged && (
+            <p className="inline-error" role="alert">
+              The approved target changed. Return to scope and review it again.
+            </p>
+          )}
+          <label className="check-label">
+            <input
+              name="campaignAuthorized"
+              type="checkbox"
+              checked={authorized}
+              onChange={(event) => setAuthorized(event.target.checked)}
+              disabled={busy || saved}
+              required
+              {...invalid("campaignAuthorized", errors)}
+            />
+            <span>I authorize this campaign within the reviewed scope.</span>
+          </label>
+          <FieldError name="campaignAuthorized" errors={errors} />
+        </>
+      )}
+      <div className="campaign-step-actions">
+        {reviewing && (
+          <button
+            className="button secondary"
+            type="button"
+            disabled={busy || saved}
+            onClick={back}
+          >
+            Back to scope
+          </button>
+        )}
+        <button
+          className="button primary submit-button"
+          disabled={
+            busy || saved || (reviewing && (!authorized || launchBlocked))
+          }
+        >
+          {busy
+            ? campaign
+              ? "Launching…"
+              : "Registering…"
+            : saved
+              ? "Saved"
+              : campaign && !reviewing
+                ? "Review campaign"
+                : content.submit}
+          <ArrowUpRightIcon size={19} />
+        </button>
+      </div>
+      {busy && (
+        <p role="status" aria-live="polite">
+          {campaign
+            ? "Submitting the authorized campaign. Please wait."
+            : "Registering the approved target. Please wait."}
+        </p>
+      )}
+      <p className="form-footnote">
+        {campaign
+          ? reviewing
+            ? "Only the explicit launch submits this campaign. Real calls can consume the reviewed budget."
+            : "Reviewing the scope does not place a call or create a campaign. The window begins when you launch."
+          : "Registration checks authorization and the operator allowlist without placing a call."}
+      </p>
+    </form>
+  );
+}
+function Prerequisites({
+  missingTarget = false,
+  live,
+  onRegisterTarget,
+  onOpenIntegrations,
+}: {
+  missingTarget?: boolean;
+  live?: Overview["live"];
+  onRegisterTarget?: () => void;
+  onOpenIntegrations?: () => void;
+}) {
+  return (
+    <div className="campaign-prerequisite-actions">
+      {!live?.enabled && (
         <p className="inline-error" role="status">
-          <WarningCircleIcon size={18} />
+          <WarningCircleIcon size={19} />
           {live?.reason ??
             "Configure the caller and resource controls before launching a campaign."}
         </p>
       )}
-      <label>
-        {content.label}
-        <input
-          autoFocus
-          name="name"
-          required
-          minLength={type === "target" ? 2 : 3}
-          maxLength={80}
-          placeholder={
-            type === "target"
-              ? "Your approved support agent"
-              : "Name this authorized campaign"
+      {missingTarget && (
+        <a
+          className="button primary"
+          href="/app/targets"
+          onClick={
+            onRegisterTarget
+              ? (event) => {
+                  event.preventDefault();
+                  onRegisterTarget();
+                }
+              : undefined
           }
-          {...invalid("name", errors)}
-        />
-        <FieldError name="name" errors={errors} />
-      </label>
-      {type === "target" ? (
-        <TargetFields errors={errors} />
-      ) : (
-        <CampaignFields
-          targets={eligible}
-          targetId={targetId}
-          errors={errors}
-        />
+        >
+          Register an approved target
+          <ArrowUpRightIcon size={17} />
+        </a>
       )}
-      <button
-        className="button primary submit-button"
-        disabled={busy || blocked}
-      >
-        {busy ? "Saving…" : content.submit}
-        <ArrowUpRightIcon size={19} />
-      </button>
-      <p className="form-footnote">
-        {type === "campaign"
-          ? "Launching places real calls to the approved number and can consume the authorized budget."
-          : "Registration checks authorization and the operator allowlist without placing a call."}
+      {!live?.enabled && (
+        <a
+          className="button secondary"
+          href="/app/integrations"
+          onClick={
+            onOpenIntegrations
+              ? (event) => {
+                  event.preventDefault();
+                  onOpenIntegrations();
+                }
+              : undefined
+          }
+        >
+          Open integrations
+          <ArrowUpRightIcon size={17} />
+        </a>
+      )}
+    </div>
+  );
+}
+function CampaignReview({ draft }: { draft: CampaignDraft }) {
+  const budget = new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+  }).format(draft.budgetCents / 100);
+  const rows = [
+    ["Campaign", draft.name],
+    ["Approved target", `${draft.targetName} · ${draft.targetPhone}`],
+    [
+      "Call slots",
+      `${draft.maxCalls} total with 2 initial slots for the control and adversarial pair`,
+    ],
+    ["Maximum call duration", `${draft.maxDurationSeconds} seconds`],
+    [
+      "Authorization window",
+      `${draft.windowMinutes} ${draft.windowMinutes === 1 ? "minute" : "minutes"} from launch`,
+    ],
+    ["Budget ceiling", budget],
+    [
+      "Stop on finding",
+      draft.stopOnFinding
+        ? "Stop remaining work after a policy violation"
+        : "Continue within the authorized limits",
+    ],
+  ];
+  return (
+    <section
+      className="campaign-review-summary"
+      aria-label="Reviewed campaign scope"
+    >
+      <dl>
+        {rows.map(([name, value]) => (
+          <div key={name}>
+            <dt>{name}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="form-help">
+        One call runs at a time. The server rechecks authorization, budget and
+        provider controls before dispatch.
       </p>
-    </form>
+    </section>
   );
 }
 function TargetFields({ errors }: { errors: Errors }) {
@@ -404,16 +629,6 @@ function CampaignFields({
         <input name="stop" type="checkbox" />
         <span>Stop remaining calls after the first policy violation</span>
       </label>
-      <label className="check-label">
-        <input
-          name="campaignAuthorized"
-          type="checkbox"
-          required
-          {...invalid("campaignAuthorized", errors)}
-        />
-        <span>I authorize this campaign within the scope above.</span>
-      </label>
-      <FieldError name="campaignAuthorized" errors={errors} />
     </>
   );
 }

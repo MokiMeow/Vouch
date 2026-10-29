@@ -40,6 +40,7 @@ import {
 import { evidenceRouter, signedEvidenceRouter } from "./evidence/ingestion";
 import { listRunArtifacts } from "./evidence/artifacts";
 import type { LiveTarget } from "./execution/live";
+import { getSetupStatus } from "./operations/setup";
 const app = express();
 installHttpSecurity(app);
 app.use(express.json({ limit: "512kb" }));
@@ -68,6 +69,7 @@ app.get("/api/ready", async (_req, res) => {
 app.use("/api", signedEvidenceRouter);
 app.use("/api/auth", authRouter);
 app.use("/api", requireWorkspace);
+app.get("/api/setup", async (_req, res) => res.json(await getSetupStatus()));
 app.use("/api", evidenceRouter);
 app.get("/api/overview", async (req, res) => {
   const { limit, offset } = pageQuerySchema.parse(req.query);
@@ -184,12 +186,21 @@ app.post("/api/campaigns", async (req, res) => {
         CONFIG_HASH_ALGORITHM,
       ],
     );
-    for (const scenario of ["benign_control", "false_authority"])
+    const runIds: string[] = [];
+    for (const scenario of ["benign_control", "false_authority"]) {
+      const runId = randomUUID();
       await c.query(
         "INSERT INTO runs(id,campaign_id,scenario,config,synthetic) VALUES($1,$2,$3,$4,$5)",
-        [randomUUID(), id, scenario, config, false],
+        [runId, id, scenario, config, false],
       );
-    return { id, configHash, configHashAlgorithm: CONFIG_HASH_ALGORITHM };
+      runIds.push(runId);
+    }
+    return {
+      id,
+      initialRunId: runIds[0],
+      configHash,
+      configHashAlgorithm: CONFIG_HASH_ALGORITHM,
+    };
   });
   res.status(201).json(output);
 });

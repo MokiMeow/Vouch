@@ -247,7 +247,7 @@ const guides: Guide[] = [
           },
           {
             kind: "text",
-            text: "Run migrations only after replacing the database placeholder and confirming the destination. Use the Supabase direct connection or session pooler on port 5432 rather than transaction pooling on port 6543. Remote connections require certificate verification. DATABASE_SSL_CA_FILE can provide a trusted PEM certificate file. Do not disable TLS checks or print the connection URI. The migration ledger records applied SQL versions. Docker is unnecessary for Supabase and remains optional for isolated local tests.",
+            text: "Run migrations only after replacing the database placeholder and confirming the destination. Use the Supabase direct connection or session pooler on port 5432 rather than transaction pooling on port 6543. Remote connections require certificate verification. DATABASE_SSL_CA_FILE can provide a trusted PEM certificate file. Do not disable TLS checks or print the connection URI. The migration ledger records applied SQL versions. Hosted Supabase does not require Docker. The isolated PostgreSQL integration suite does.",
           },
         ],
       },
@@ -275,6 +275,10 @@ const guides: Guide[] = [
             kind: "text",
             text: "Sign in as the bootstrap owner, rotate the initial password, then remove the bootstrap password from the server environment. Existing accounts are not overwritten on restart. Until the actual database and provider credentials are supplied, connection checks may report unavailable. Do not replace failures with demo data.",
           },
+          {
+            kind: "text",
+            text: "Open Integrations to view Workspace setup. Expand each check for the exact server settings or command needed, then select Check setup after correcting the configuration and restarting the affected service. Database access, caller configuration, carrier controls, authorization, evidence storage, billing, dispatch and worker health are reported separately. No setup check places a call.",
+          },
         ],
       },
       {
@@ -289,13 +293,13 @@ const guides: Guide[] = [
           },
           {
             kind: "text",
-            text: "Database and browser checks need an explicitly configured disposable test database and running services. Integration checks must never target retained workspace or customer data. Their controlled test observations do not represent real provider acceptance.",
+            text: "The integration runner creates its own temporary PostgreSQL container and API. It uses an actual browser to register a target, then verifies persistence and worker health before cleaning up. Docker must be running with postgres:17-alpine cached. Browser-only checks serve the built interface and intercept test responses inside the test process. Neither runner needs retained workspace data, provider credentials or an already running API.",
           },
           {
             kind: "code",
             title: "Run configured isolated checks",
             language: "shell",
-            text: "pnpm test:integration\npnpm test:browser\npnpm test:browser:requests\npnpm test:browser:design",
+            text: "docker pull postgres:17-alpine\npnpm test:integration\npnpm test:browser",
           },
           {
             kind: "note",
@@ -411,8 +415,10 @@ const guides: Guide[] = [
             kind: "list",
             items: [
               "Choose the registered approved phone target.",
-              "Review the captured window, call slots, duration, budget and stop condition.",
-              "Confirm authorization and launch only when real calls are intended.",
+              "Set the campaign name, target, call slots, duration, window, budget and stop condition.",
+              "Select Review campaign to inspect the frozen scope. This step sends no launch request.",
+              "Use Back to edit scope when needed. Review again and confirm the authorization checkbox before selecting Authorize and launch campaign.",
+              "The authorized window begins at the final launch. Successful launch opens the initial run page. Target registration saves the target and returns to Targets.",
               "Keep API and worker services available while the campaign runs.",
               "Inspect each actual execution and signed backend stream from the run page.",
             ],
@@ -926,6 +932,10 @@ const guides: Guide[] = [
             rows: [
               ["GET /api/health", "Check the API and PostgreSQL connection"],
               [
+                "GET /api/setup",
+                "Read authenticated setup diagnostics with safe configuration fields, database schema state and shared worker health. No provider request is made",
+              ],
+              [
                 "GET /api/overview",
                 "Read paginated campaigns with associated runs, global counts and live readiness",
               ],
@@ -949,7 +959,7 @@ const guides: Guide[] = [
           },
           {
             kind: "text",
-            text: "Target creation requires a name, PSTN transport, authorization and an authorization reference. Campaign creation uses the registered target and full validated scope. Overview and findings accept limit from 1 to 100 and a nonnegative offset. Findings filtering happens across the workspace before pagination rather than only within one downloaded page.",
+            text: "Target creation requires a name, PSTN transport, authorization and an authorization reference. Campaign creation uses the registered target and full validated scope, returning the campaign id and initialRunId for the first control run. Overview and findings accept limit from 1 to 100 and a nonnegative offset. Findings filtering happens across the workspace before pagination rather than only within one downloaded page.",
           },
           {
             kind: "text",
@@ -1127,7 +1137,7 @@ const guides: Guide[] = [
           },
           {
             kind: "text",
-            text: "Docker is required only for an optional local database or container deployment. Do not start duplicate API or worker processes. Never reset retained data to solve an ordinary connection problem.",
+            text: "Docker is required for the isolated PostgreSQL integration suite, an optional local database or container deployment. Hosted Supabase does not require Docker. Do not start duplicate API or worker processes. Never reset retained data to solve an ordinary connection problem.",
           },
         ],
       },

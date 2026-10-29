@@ -1,7 +1,11 @@
 import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
-    include: ["apps/api/test/*.test.ts", "packages/core/test/*.test.ts"],
+    include: [
+      "apps/api/test/*.test.ts",
+      "packages/core/test/*.test.ts",
+      "apps/web/src/features/**/*.test.ts",
+    ],
     maxWorkers: 2,
     coverage: {
       provider: "v8",

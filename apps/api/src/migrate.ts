@@ -31,6 +31,7 @@ const ownedTables = [
   "vouch_workspaces",
   "vouch_memberships",
   "vouch_schema_migrations",
+  "service_heartbeats",
 ];
 
 async function preflight(client: pg.PoolClient) {

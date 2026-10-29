@@ -51,6 +51,19 @@ export async function tick() {
     }
   });
 }
+export async function runWorkerIteration(
+  runTick = tick,
+  recordHeartbeat = workerHeartbeat,
+) {
+  try {
+    const active = await runTick();
+    await recordHeartbeat("healthy");
+    return active;
+  } catch (error) {
+    await recordHeartbeat("failed").catch(() => undefined);
+    throw error;
+  }
+}
 if (import.meta.url === new URL(process.argv[1], "file:").href) {
   console.log(
     "Vouch worker ready (provider-backed calls, PostgreSQL queue, concurrency 1)",
@@ -64,16 +77,16 @@ if (import.meta.url === new URL(process.argv[1], "file:").href) {
   while (!stopping) {
     let active = false;
     try {
-      active = await tick();
+      active = await runWorkerIteration();
     } catch (error) {
       console.error(
         "Worker database operation failed",
         error instanceof Error ? error.message : "unknown",
       );
     }
-    await workerHeartbeat();
     await new Promise((r) => setTimeout(r, active ? 500 : 2500));
   }
+  await workerHeartbeat("failed").catch(() => undefined);
   await callerCleanupTask;
   await db.end();
 }

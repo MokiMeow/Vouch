@@ -22,7 +22,12 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, dateLabel, label, titleForRun, when } from "../../shared/lib";
-import { useEvidence, useOverview, useFindings } from "../../shared/hooks/data";
+import {
+  useEvidence,
+  useOverview,
+  useFindings,
+  useSetup,
+} from "../../shared/hooks/data";
 import {
   readView,
   updateView,
@@ -38,6 +43,13 @@ import type {
   RunSummary as Run,
 } from "../../shared/types";
 import { SetupForm } from "../campaigns/CampaignForm";
+import type { SetupResult } from "../campaigns/CampaignForm";
+import { StopCampaign } from "../campaigns/StopCampaign";
+import {
+  FirstRunGuide,
+  WorkspaceSetup,
+  CallerConnectionCheck,
+} from "./WorkspaceSetup";
 import {
   ArrowLink,
   Badge,
@@ -188,7 +200,10 @@ function useTimedNotice() {
   }, [notice]);
   return { notice, setNotice };
 }
-type ModalSettings = { type: "campaign" | "target"; targetId?: string } | null;
+type ModalSettings =
+  | { type: "campaign" | "target"; targetId?: string }
+  | { type: "stop"; campaign: Campaign }
+  | null;
 export function Workspace({
   path,
   location,
@@ -208,13 +223,25 @@ export function Workspace({
   const view = readView(location);
   const historyOffset = path === "/app/campaigns" ? (view.page - 1) * 50 : 0;
   const overview = useOverview(undefined, historyOffset);
+  const setup = useSetup();
   const { data, refresh } = overview;
+  const arrival = useRef<{ path: string; message: string } | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const currentLocation = useRef(location);
   currentLocation.current = location;
   useEffect(() => {
     setModal(null);
     setError("");
-    setNotice("");
+    setNotice(
+      arrival.current?.path === location ? arrival.current.message : "",
+    );
+    arrival.current = null;
   }, [location, setNotice]);
   const evidence = useEvidence(path);
   const page = pageFor(path);
@@ -233,6 +260,55 @@ export function Workspace({
         setError((error as Error).message);
       return null;
     }
+  }
+  function openDialog(settings: ModalSettings) {
+    if (
+      settings?.type === "target" &&
+      setup.data &&
+      !setup.data.canRegisterTarget
+    ) {
+      arrival.current = {
+        path: "/app/integrations",
+        message:
+          "Finish the database and target authorization setup before registering a phone target.",
+      };
+      navigate("/app/integrations");
+      return;
+    }
+    if (settings?.type === "campaign") {
+      if (!data) return navigate("/app/integrations");
+      if (!data?.targets.length) return openDialog({ type: "target" });
+      if (!data.live.enabled) return navigate("/app/integrations");
+    }
+    setModal(settings);
+  }
+  async function saved(message: string, result?: SetupResult) {
+    if (!mounted.current || currentLocation.current !== location) return;
+    setModal(null);
+    await refresh();
+    if (!mounted.current || currentLocation.current !== location) return;
+    if (!result) return setNotice(message);
+    const next =
+      result.type === "target"
+        ? `/app/targets?created=${encodeURIComponent(result.id)}`
+        : result.initialRunId
+          ? runHref(result.initialRunId, "/app/campaigns")
+          : "/app/campaigns";
+    arrival.current = { path: next, message };
+    navigate(next);
+  }
+  async function stopCampaign(campaign: Campaign) {
+    const source = currentLocation.current;
+    await api(`/campaigns/${campaign.id}/stop`, {});
+    await refresh();
+    if (currentLocation.current === source)
+      setNotice(
+        "Stop requested. Queued calls cancelled and active calls marked for cancellation.",
+      );
+  }
+  function checkSetup() {
+    void setup.refresh();
+    void refresh();
   }
   return (
     <div className="workspace-app">
@@ -277,18 +353,71 @@ export function Workspace({
         {notice && (
           <Notice kind="success" message={notice} close={() => setNotice("")} />
         )}
-        {data ? (
-          <WorkspaceContent
+        {data && overview.error && !evidence.runId && (
+          <div className="notice error" role="alert">
+            Activity could not be refreshed. Showing the last fetched records.
+            <button className="text-button" onClick={() => void refresh()}>
+              Retry update
+            </button>
+          </div>
+        )}
+        {evidence.runId ? (
+          <EvidenceContent
+            evidence={evidence}
+            navigate={navigate}
+            action={action}
+            location={location}
+          />
+        ) : page === "Integrations" ? (
+          <>
+            <WorkspaceSetup
+              status={setup.data}
+              error={setup.error}
+              checking={setup.loading}
+              onCheck={checkSetup}
+            />
+            <CallerConnectionCheck
+              configured={
+                setup.data?.checks.find((check) => check.id === "caller")
+                  ?.state === "ready"
+              }
+              owner={session.workspace?.role === "owner"}
+            />
+          </>
+        ) : page === "Findings" ? (
+          <div className="page-enter">
+            <PageHeading page={page} setModal={openDialog} />
+            <FindingsView
+              location={location}
+              navigate={navigate}
+              campaign={() => openDialog({ type: "campaign" })}
+              openRun={(id) => navigate(runHref(id, location))}
+            />
+          </div>
+        ) : data ? (
+          <WorkspacePage
             data={data}
             evidence={evidence}
             page={page}
             location={location}
             navigate={navigate}
-            setModal={setModal}
+            setModal={openDialog}
             action={action}
           />
+        ) : overview.error || setup.data?.databaseReady === false ? (
+          <WorkspaceSetup
+            status={setup.data}
+            error={setup.error}
+            checking={setup.loading}
+            onCheck={checkSetup}
+            title={
+              page === "Overview"
+                ? "Connect your workspace"
+                : `${page} need a database connection`
+            }
+          />
         ) : (
-          <WorkspaceLoading refresh={refresh} message={overview.error} />
+          <WorkspaceLoading refresh={refresh} />
         )}
         {data?.pagination && page === "Campaigns" && !evidence.runId && (
           <HistoryPagination
@@ -306,40 +435,20 @@ export function Workspace({
         settings={modal}
         data={data}
         onClose={() => setModal(null)}
-        onSuccess={async (message) => {
-          setModal(null);
-          setNotice(message);
-          await refresh();
-        }}
+        onSuccess={saved}
+        onStop={stopCampaign}
+        onRegisterTarget={() => setModal({ type: "target" })}
+        onOpenIntegrations={() => navigate("/app/integrations")}
       />
     </div>
   );
 }
-function WorkspaceLoading({
-  refresh,
-  message,
-}: {
-  refresh: () => void;
-  message?: string;
-}) {
+function WorkspaceLoading({ refresh }: { refresh: () => void }) {
   return (
     <div className="loading-state" role="status">
-      {message ? (
-        <PlugsIcon size={28} />
-      ) : (
-        <SpinnerGapIcon className="spin" size={24} />
-      )}
-      <h1>{message ? "Connect your workspace." : "Opening your workspace."}</h1>
-      <p>
-        {message?.includes("DATABASE_")
-          ? "Add your Supabase connection in the server environment. Your workspace will show real records after setup."
-          : message || "Connecting to the evidence store…"}
-      </p>
-      {message && (
-        <a className="button secondary" href="/docs/quickstart">
-          Set up Supabase
-        </a>
-      )}
+      <SpinnerGapIcon className="spin" size={24} />
+      <h1>Opening your workspace.</h1>
+      <p>Loading your stored activity and connection status…</p>
       <button className="text-button" onClick={refresh}>
         Try again <ArrowClockwiseIcon size={17} />
       </button>
@@ -351,13 +460,27 @@ function WorkspaceDialog({
   data,
   onClose,
   onSuccess,
+  onStop,
+  onRegisterTarget,
+  onOpenIntegrations,
 }: {
   settings: ModalSettings;
   data: Overview | null;
   onClose: () => void;
-  onSuccess: (message: string) => void;
+  onSuccess: (message: string, result?: SetupResult) => void;
+  onStop: (campaign: Campaign) => Promise<void>;
+  onRegisterTarget: () => void;
+  onOpenIntegrations: () => void;
 }) {
   if (!settings) return null;
+  if (settings.type === "stop")
+    return (
+      <StopCampaign
+        campaign={settings.campaign}
+        onCancel={onClose}
+        onStop={() => onStop(settings.campaign)}
+      />
+    );
   const title =
     settings.type === "campaign"
       ? "Set a test in motion."
@@ -365,11 +488,14 @@ function WorkspaceDialog({
   return (
     <Modal title={title} onClose={onClose}>
       <SetupForm
+        key={settings.type}
         type={settings.type}
         targets={data?.targets ?? []}
         targetId={settings.targetId}
         live={data?.live}
         onSuccess={onSuccess}
+        onRegisterTarget={onRegisterTarget}
+        onOpenIntegrations={onOpenIntegrations}
       />
     </Modal>
   );
@@ -395,9 +521,10 @@ type ContentProps = {
   setModal: (settings: ModalSettings) => void;
   action: Action;
 };
-function WorkspaceContent(props: ContentProps) {
+function EvidenceContent(
+  props: Pick<ContentProps, "evidence" | "navigate" | "action" | "location">,
+) {
   const { evidence, navigate, action } = props;
-  if (!evidence.runId) return <WorkspacePage {...props} />;
   if (evidence.error && !evidence.run)
     return (
       <div className="loading-state" role="alert">
@@ -512,10 +639,13 @@ function WorkspacePage({
   location,
   navigate,
   setModal,
-  action,
 }: ContentProps) {
   const openRun = (id: string) => navigate(runHref(id, location));
   const campaign = () => setModal({ type: "campaign" });
+  const stop = (id: string) => {
+    const selected = data.campaigns.find((entry) => entry.id === id);
+    if (selected) setModal({ type: "stop", campaign: selected });
+  };
   const views: Record<string, React.ReactNode> = {
     Overview: (
       <OverviewView
@@ -523,7 +653,8 @@ function WorkspacePage({
         navigate={navigate}
         openRun={openRun}
         campaign={campaign}
-        action={action}
+        stop={stop}
+        register={() => setModal({ type: "target" })}
       />
     ),
     Campaigns: (
@@ -531,19 +662,10 @@ function WorkspacePage({
         data={data}
         openRun={openRun}
         campaign={campaign}
-        action={action}
-      />
-    ),
-    Findings: (
-      <FindingsView
-        openRun={openRun}
-        campaign={campaign}
-        location={location}
-        navigate={navigate}
+        stop={stop}
       />
     ),
     Targets: <TargetsView data={data} setModal={setModal} />,
-    Integrations: <IntegrationsView data={data} action={action} />,
   };
   return (
     <div className="page-enter" key={page}>
@@ -842,8 +964,18 @@ function OverviewView({
   navigate,
   openRun,
   campaign,
-  action,
-}: CommonView) {
+  stop,
+  register,
+}: CommonView & { register: () => void }) {
+  if ((data.summary?.campaigns ?? data.campaigns.length) === 0)
+    return (
+      <FirstRunGuide
+        data={data}
+        register={register}
+        setup={() => navigate("/app/integrations")}
+        campaign={campaign}
+      />
+    );
   return (
     <>
       <MissionIntro
@@ -868,13 +1000,7 @@ function OverviewView({
             runs={data.runs}
             openRun={openRun}
             create={campaign}
-            stop={(id) =>
-              action(
-                `/campaigns/${id}/stop`,
-                {},
-                "Stop requested. Queued calls cancelled and active calls marked for cancellation.",
-              )
-            }
+            stop={stop}
           />
         </section>
         <OverviewReviews
@@ -900,7 +1026,7 @@ function CampaignsView({
   data,
   openRun,
   campaign,
-  action,
+  stop,
 }: Omit<CommonView, "navigate">) {
   return (
     <section className="campaigns-view">
@@ -918,13 +1044,7 @@ function CampaignsView({
         runs={data.runs}
         openRun={openRun}
         create={campaign}
-        stop={(id) =>
-          action(
-            `/campaigns/${id}/stop`,
-            {},
-            "Stop requested. Queued calls cancelled and active calls marked for cancellation.",
-          )
-        }
+        stop={stop}
         expanded
       />
     </section>
@@ -1012,14 +1132,28 @@ function FindingsView({
         <Empty
           title="Nothing in this view."
           text={
-            search.trim() || outcome !== "all"
+            search.trim() || outcome !== "all" || page > 1
               ? "Try another search or outcome filter."
               : "Register an authorized target and launch a call to collect evidence."
           }
           button={
-            search.trim() || outcome !== "all" ? undefined : "New campaign"
+            search.trim() || outcome !== "all" || page > 1
+              ? "Clear filters"
+              : "New campaign"
           }
-          action={campaign}
+          action={
+            search.trim() || outcome !== "all" || page > 1
+              ? () =>
+                  navigate(
+                    updateView(location, {
+                      search: "",
+                      outcome: "all",
+                      page: 1,
+                    }),
+                    { scroll: false },
+                  )
+              : campaign
+          }
         />
       )}
       {data && (
@@ -1075,7 +1209,6 @@ function TargetsView({
             </div>
             <button
               className="button secondary"
-              disabled={!data.live.enabled}
               title={
                 data.live.enabled
                   ? "Start an authorized live campaign"
@@ -1102,88 +1235,6 @@ function TargetsView({
         <PlusIcon size={21} />
         Register another approved target <ArrowUpRightIcon size={18} />
       </button>
-    </section>
-  );
-}
-
-function IntegrationsView({
-  data,
-  action,
-}: Pick<CommonView, "data" | "action">) {
-  return (
-    <section className="integrations-view">
-      <article className="integration-row">
-        <span className="integration-monogram">b.</span>
-        <div className="integration-content">
-          <div className="integration-title">
-            <h2>Bolna</h2>
-            <Badge tone={data.live.enabled ? "violet" : "amber"}>
-              {data.live.enabled ? "Configuration ready" : "Setup required"}
-            </Badge>
-          </div>
-          <p>
-            Hosted caller runtime with bounded dispatch and recorded evidence.
-          </p>
-          <dl>
-            <div>
-              <dt>Credentials</dt>
-              <dd>{data.live.configured ? "Configured" : "Not configured"}</dd>
-            </div>
-            <div>
-              <dt>Caller agent</dt>
-              <dd>
-                {data.live.agentConfigured ? "Configured" : "Not configured"}
-              </dd>
-            </div>
-            <div>
-              <dt>API flavor</dt>
-              <dd>Hosted REST · agent v2</dd>
-            </div>
-            <div>
-              <dt>Live dispatch</dt>
-              <dd>
-                {data.live.enabled
-                  ? "Configuration ready"
-                  : "Blocked by prerequisites"}
-              </dd>
-            </div>
-          </dl>
-          <div className="connection-boundary">
-            <WarningCircleIcon size={19} />
-            <p>
-              {data.live.reason} Provider configuration readiness is separate
-              from a verified live call.
-            </p>
-          </div>
-          <button
-            className="button secondary"
-            onClick={() =>
-              action(
-                "/integrations/bolna/check",
-                {},
-                "Bolna read-only connection verified. Campaign launch still checks every resource control.",
-              )
-            }
-          >
-            Check connection <ArrowUpRightIcon size={17} />
-          </button>
-        </div>
-      </article>
-      <div className="integration-note">
-        <LockSimpleIcon size={22} weight="light" />
-        <div>
-          <h3>Before going live.</h3>
-          <p>
-            Live calls require provider controls for duration, cancellation and
-            budget. Keep credentials in the server environment and use only
-            approved targets.
-          </p>
-          <p>
-            Workspace access and provider setup are managed independently. Never
-            put provider credentials into browser settings.
-          </p>
-        </div>
-      </div>
     </section>
   );
 }
@@ -1282,7 +1333,7 @@ type CommonView = {
   navigate: Navigate;
   openRun: (id: string) => void;
   campaign: () => void;
-  action: Action;
+  stop: (id: string) => void;
 };
 
 function HistoryPagination({

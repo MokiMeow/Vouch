@@ -15,6 +15,7 @@ import type {
   RunSummary,
   Scope,
 } from "../../apps/web/src/shared/types";
+import type { SetupStatus } from "../../packages/core/src/setup";
 
 const uuid = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -112,10 +113,10 @@ const base: Overview = {
   runs: [],
   policy: { id: "contact-verification", version: 1 },
   live: {
-    configured: false,
-    agentConfigured: false,
+    configured: true,
+    agentConfigured: true,
     verified: false,
-    enabled: false,
+    enabled: true,
     reason: "No provider calls from browser regression",
   },
   summary: {
@@ -127,6 +128,31 @@ const base: Overview = {
     totalRuns: runs.length,
     activeRuns: 0,
   },
+};
+const setup: SetupStatus = {
+  checkedAt: new Date().toISOString(),
+  databaseReady: true,
+  canRegisterTarget: true,
+  liveConfigurationReady: true,
+  checks: (
+    [
+      "database",
+      "caller",
+      "carrier",
+      "authorization",
+      "evidence",
+      "billing",
+      "dispatch",
+      "worker",
+    ] as const
+  ).map((key) => ({
+    id: key,
+    title: `${key} configuration`,
+    state: "ready",
+    detail: "Test-only configuration present. No real provider call verified.",
+    fields: [],
+    docsPath: "/docs/quickstart",
+  })),
 };
 const web = express();
 web.use(express.static(resolve("dist/web")));
@@ -154,9 +180,10 @@ const unexpectedApi: string[] = [];
 const findingQueries: URLSearchParams[] = [];
 const accessibilityFindings: { screen: string; violations: unknown[] }[] = [];
 let detailWrites = 0;
-let stopMode: "fail" | "hold" = "fail";
-let releaseStop: () => void = () => {};
-let stopStarted: () => void = () => {};
+let stopRequests = 0;
+let providerMode: "fail" | "hold" = "fail";
+let releaseProvider: () => void = () => {};
+let providerStarted: () => void = () => {};
 page.on("pageerror", (error) => pageErrors.push(error.message));
 await context.route("**/*", (route) =>
   new URL(route.request().url()).origin === origin
@@ -168,6 +195,7 @@ await page.route("**/api/**", async (route) => {
   const url = new URL(request.url());
   if (url.pathname === "/api/auth/session")
     return route.fulfill({ json: session });
+  if (url.pathname === "/api/setup") return route.fulfill({ json: setup });
   if (url.pathname === "/api/overview") {
     const offset = Number(url.searchParams.get("offset") ?? 0);
     const visible = campaigns.slice(offset, offset + 50);
@@ -219,14 +247,21 @@ await page.route("**/api/**", async (route) => {
   if (/^\/api\/runs\//.test(url.pathname) && request.method() !== "GET")
     detailWrites++;
   if (/^\/api\/campaigns\/[a-f0-9-]+\/stop$/.test(url.pathname)) {
-    stopStarted();
-    if (stopMode === "hold")
+    stopRequests++;
+    return route.fulfill({
+      status: 409,
+      json: { error: "Stop request could not be accepted" },
+    });
+  }
+  if (url.pathname === "/api/integrations/bolna/check") {
+    providerStarted();
+    if (providerMode === "hold")
       await new Promise<void>((resolve) => {
-        releaseStop = resolve;
+        releaseProvider = resolve;
       });
     return route.fulfill({
       status: 409,
-      json: { error: "Old campaign action failed" },
+      json: { error: "Old provider check failed" },
     });
   }
   unexpectedApi.push(`${request.method()} ${url.pathname}`);
@@ -575,28 +610,69 @@ try {
   await active
     .getByRole("button", { name: "Stop Report campaign 001", exact: true })
     .click();
-  await page.getByText("Old campaign action failed", { exact: true }).waitFor();
+  await page
+    .getByRole("heading", { name: "Stop this campaign?", exact: true })
+    .waitFor();
+  assert.equal(
+    stopRequests,
+    0,
+    "Opening confirmation must not stop the campaign",
+  );
+  await page
+    .getByRole("button", { name: "Keep campaign", exact: true })
+    .click();
+  assert.equal(
+    stopRequests,
+    0,
+    "Cancelling confirmation must not stop the campaign",
+  );
+  await active
+    .getByRole("button", { name: "Stop Report campaign 001", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Stop campaign", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByText("Stop request could not be accepted", { exact: true })
+    .waitFor();
+  assert.equal(stopRequests, 1);
+  await page
+    .getByRole("button", { name: "Keep campaign", exact: true })
+    .click();
+  await page.goto(`${origin}/app/integrations`);
+  await page
+    .getByRole("heading", { name: "Workspace setup", exact: true })
+    .waitFor();
+  await page
+    .getByRole("button", { name: "Check connection", exact: true })
+    .click();
+  await page.getByText("Old provider check failed", { exact: true }).waitFor();
   await page.getByRole("link", { name: /^Findings/ }).click();
   assert.equal(
-    await page.getByText("Old campaign action failed", { exact: true }).count(),
+    await page.getByText("Old provider check failed", { exact: true }).count(),
     0,
     "Action errors clear when navigating",
   );
 
-  await visit("/app/campaigns");
-  stopMode = "hold";
+  await page.goto(`${origin}/app/integrations`);
+  await page
+    .getByRole("heading", { name: "Workspace setup", exact: true })
+    .waitFor();
+  providerMode = "hold";
   const started = new Promise<void>((resolve) => {
-    stopStarted = resolve;
+    providerStarted = resolve;
   });
   await page
-    .getByRole("button", { name: "Stop Report campaign 001", exact: true })
+    .getByRole("button", { name: "Check connection", exact: true })
     .click();
   await boundedRequest(started);
   await page.getByRole("link", { name: /^Findings/ }).click();
-  releaseStop();
+  releaseProvider();
   await page.waitForTimeout(100);
   assert.equal(
-    await page.getByText("Old campaign action failed", { exact: true }).count(),
+    await page.getByText("Old provider check failed", { exact: true }).count(),
     0,
     "A late action error from the previous route must not surface on the new route",
   );
@@ -660,7 +736,7 @@ try {
     "Report browser regression passed with 71 intercepted test-only records. URL/history, modal cleanup, global search, review labels, action guards, stale errors, all Docs routes/search/copy/focus, landing links, 320–2560px layouts and automated WCAG checks verified. No database writes or external requests.",
   );
 } finally {
-  releaseStop();
+  releaseProvider();
   await context.close();
   await browser.close();
   await new Promise<void>((resolve, reject) =>

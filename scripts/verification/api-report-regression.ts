@@ -8,6 +8,7 @@ import { createServer } from "node:net";
 import pg from "pg";
 import { z } from "zod";
 import { policy } from "../../packages/core/src/policy";
+import { chromium } from "playwright";
 
 // Never accept an external connection URL. All writes are confined to a newly
 // created disposable cluster and its explicitly test-suffixed database.
@@ -22,15 +23,17 @@ const tempDirectory = await mkdtemp(join(tmpdir(), "vouch-api-report-"));
 const checks: string[] = [];
 let containerCreated = false;
 let api: ChildProcess | undefined;
+let worker: ChildProcess | undefined;
 let apiLog = "";
 let admin: pg.Pool | undefined;
 let endApplicationDatabase: (() => Promise<void>) | undefined;
 let databaseUrl = "";
+let firstUseAssertions = 0;
 const savedEnvironment = { ...process.env };
 const cleanEnvironment = Object.fromEntries(
   Object.entries(process.env).filter(
     ([name]) =>
-      !/^(?:DATABASE_|BOLNA_|TWILIO_|VOUCH_|DOTENV_|AUTHORIZED_PHONE_NUMBERS$|PUBLIC_ORIGIN$|HOST$|PORT$|NODE_ENV$)/.test(
+      !/^(?:DATABASE_|TEST_DATABASE_URL$|SUPABASE_|PG[A-Z_]+$|BOLNA_|TWILIO_|VOUCH_|DOTENV_|AUTHORIZED_PHONE_NUMBERS$|PUBLIC_ORIGIN$|HOST$|PORT$|NODE_ENV$)/.test(
         name,
       ),
   ),
@@ -85,28 +88,32 @@ async function stopApi() {
   }
   api = undefined;
 }
+function applicationEnvironment(mode: "local" | "session") {
+  return {
+    ...cleanEnvironment,
+    DATABASE_URL: databaseUrl,
+    DATABASE_MIGRATION_URL: databaseUrl,
+    DATABASE_RUNTIME_ROLE: databaseUser,
+    DOTENV_CONFIG_PATH: join(tempDirectory, "absent.env"),
+    NODE_ENV: "test",
+    HOST: "127.0.0.1",
+    PORT: String(apiPort),
+    PUBLIC_ORIGIN: origin,
+    VOUCH_AUTH_MODE: mode,
+    VOUCH_COOKIE_SECURE: "false",
+    VOUCH_LIVE_ENABLED: "false",
+    VOUCH_WORKER_HEARTBEAT_FILE: join(tempDirectory, "absent-worker-heartbeat"),
+    AUTHORIZED_PHONE_NUMBERS: "+12025550199",
+    VOUCH_BOOTSTRAP_EMAIL: "report-owner@example.test",
+    VOUCH_BOOTSTRAP_PASSWORD: password,
+  };
+}
 async function startApi(mode: "local" | "session") {
   await stopApi();
   apiLog = "";
   api = spawn(process.execPath, ["--import", "tsx", "apps/api/src/server.ts"], {
     cwd: process.cwd(),
-    env: {
-      ...cleanEnvironment,
-      DATABASE_URL: databaseUrl,
-      DATABASE_MIGRATION_URL: databaseUrl,
-      DATABASE_RUNTIME_ROLE: databaseUser,
-      DOTENV_CONFIG_PATH: join(tempDirectory, "absent.env"),
-      NODE_ENV: "test",
-      HOST: "127.0.0.1",
-      PORT: String(apiPort),
-      PUBLIC_ORIGIN: origin,
-      VOUCH_AUTH_MODE: mode,
-      VOUCH_COOKIE_SECURE: "false",
-      VOUCH_LIVE_ENABLED: "false",
-      AUTHORIZED_PHONE_NUMBERS: "+12025550199",
-      VOUCH_BOOTSTRAP_EMAIL: "report-owner@example.test",
-      VOUCH_BOOTSTRAP_PASSWORD: password,
-    },
+    env: applicationEnvironment(mode),
     stdio: ["ignore", "pipe", "pipe"],
   });
   for (const stream of [api.stdout, api.stderr])
@@ -199,6 +206,520 @@ function scope(minutes = 60) {
     stopOnFinding: false,
   };
 }
+const setupSchema = z.object({
+  checkedAt: z.iso.datetime(),
+  databaseReady: z.boolean(),
+  canRegisterTarget: z.boolean(),
+  liveConfigurationReady: z.boolean(),
+  checks: z.array(
+    z.object({
+      id: z.enum([
+        "database",
+        "caller",
+        "carrier",
+        "authorization",
+        "evidence",
+        "billing",
+        "dispatch",
+        "worker",
+      ]),
+      title: z.string(),
+      state: z.enum(["ready", "action_required", "unavailable", "not_checked"]),
+      detail: z.string(),
+      fields: z.array(z.string()),
+      docsPath: z.string(),
+      command: z.string().optional(),
+    }),
+  ),
+});
+async function assertSetupStatus() {
+  const response = await request("/api/setup");
+  equal(
+    response.status,
+    200,
+    "Actual setup diagnostics endpoint responds without provider credentials",
+  );
+  const setup = setupSchema.parse(response.body);
+  equal(
+    setup.databaseReady,
+    true,
+    "Setup reports the authenticated isolated database connection ready",
+  );
+  equal(
+    setup.canRegisterTarget,
+    true,
+    "Setup permits target registration with database and operator allowlist",
+  );
+  equal(
+    setup.liveConfigurationReady,
+    false,
+    "Setup does not mark missing live configuration ready",
+  );
+  equal(
+    setup.checks.length,
+    8,
+    "Setup returns all eight actionable prerequisite checks",
+  );
+  const byId = new Map(setup.checks.map((item) => [item.id, item]));
+  equal(
+    byId.get("database")?.state,
+    "ready",
+    "Database checklist state reflects a working migrated database",
+  );
+  equal(
+    byId.get("authorization")?.state,
+    "ready",
+    "Authorization checklist detects the configured target allowlist",
+  );
+  for (const id of [
+    "caller",
+    "carrier",
+    "evidence",
+    "billing",
+    "dispatch",
+  ] as const)
+    equal(
+      byId.get(id)?.state,
+      "action_required",
+      `Missing ${id} setup remains an actionable prerequisite`,
+    );
+  equal(
+    byId.get("worker")?.state,
+    "unavailable",
+    "Setup detects that no actual worker heartbeat exists",
+  );
+  check(
+    !JSON.stringify(setup).includes(password) &&
+      !JSON.stringify(setup).includes(databaseUrl),
+    "Diagnostics do not return configured secrets or connection URLs",
+  );
+  check(
+    setup.checks.every((item) => item.docsPath.startsWith("/docs")),
+    "Every setup prerequisite links to actual public guidance",
+  );
+  return setup;
+}
+
+async function firstUseJourney() {
+  const initialChecks = checks.length;
+  assert.ok(admin);
+  await startApi("local");
+  const setup = await assertSetupStatus();
+  const browser = await chromium.launch({
+    executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium",
+    headless: true,
+    args: ["--no-sandbox"],
+  });
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 1000 },
+    reducedMotion: "reduce",
+  });
+  const page = await context.newPage();
+  const errors: string[] = [];
+  const externalRequests: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("request", (request_) => {
+    const requested = new URL(request_.url());
+    if (requested.origin !== origin && requested.protocol !== "data:")
+      externalRequests.push(requested.origin);
+  });
+  await mkdir("artifacts/functional-journey", { recursive: true });
+  try {
+    await page.goto(`${origin}/app`);
+    await page
+      .getByRole("heading", {
+        name: "Start with an approved target",
+        exact: true,
+      })
+      .waitFor();
+    check(
+      await page
+        .getByRole("button", {
+          name: "Register your first target",
+          exact: true,
+        })
+        .isVisible(),
+      "Fresh overview offers an actionable first target registration",
+    );
+    equal(
+      (await admin.query("SELECT count(*)::int AS count FROM targets")).rows[0]
+        .count,
+      0,
+      "First-use browser journey begins without seeded targets",
+    );
+    equal(
+      (await admin.query("SELECT count(*)::int AS count FROM runs")).rows[0]
+        .count,
+      0,
+      "First-use browser journey begins without simulated conversations",
+    );
+    await page.screenshot({
+      path: "artifacts/functional-journey/first-use.png",
+      fullPage: true,
+    });
+    await page
+      .getByRole("button", { name: "Register your first target", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await dialog.waitFor();
+    const name = `Operator-entered target ${randomBytes(3).toString("hex")}`;
+    const reference =
+      "Operator approval entered through actual registration form";
+    await dialog.getByLabel("Target name", { exact: true }).fill(name);
+    await dialog
+      .getByLabel("Approved international phone number", { exact: true })
+      .fill("+12025550199");
+    await dialog
+      .getByLabel("Authorization reference", { exact: true })
+      .fill(reference);
+    await dialog
+      .getByRole("checkbox", {
+        name: "I own this target or have explicit authorization to test it.",
+        exact: true,
+      })
+      .check();
+    await dialog
+      .getByRole("button", { name: "Register target", exact: true })
+      .click();
+    await page.waitForURL(
+      (url) =>
+        url.pathname === "/app/targets" && url.searchParams.has("created"),
+    );
+    await page.getByText(name, { exact: true }).waitFor();
+    check(
+      await page.getByText(name, { exact: true }).isVisible(),
+      "Successful registration navigates to Targets and displays the entered target",
+    );
+    const stored = (
+      await admin.query(
+        "SELECT id,name,phone,authorization_reference FROM targets WHERE name=$1 AND workspace_id=$2",
+        [name, workspaceId],
+      )
+    ).rows;
+    equal(
+      stored.length,
+      1,
+      "Actual registration API persists exactly one user-entered target",
+    );
+    equal(
+      stored[0].phone,
+      "+12025550199",
+      "Actual registration preserves the approved phone input",
+    );
+    equal(
+      stored[0].authorization_reference,
+      reference,
+      "Actual registration preserves the operator authorization reference",
+    );
+    equal(
+      new URL(page.url()).searchParams.get("created"),
+      stored[0].id,
+      "Registration success route identifies the actual stored target",
+    );
+    await page.reload();
+    await page.getByText(name, { exact: true }).waitFor();
+    check(
+      await page.getByText(name, { exact: true }).isVisible(),
+      "Target remains visible after a real direct-page reload",
+    );
+    await page.screenshot({
+      path: "artifacts/functional-journey/registered-target.png",
+      fullPage: true,
+    });
+    await page
+      .getByRole("button", { name: "Create campaign", exact: true })
+      .first()
+      .click();
+    await page.waitForURL((url) => url.pathname === "/app/integrations");
+    await page
+      .getByRole("heading", { name: "Workspace setup", exact: true })
+      .waitFor();
+    check(
+      await page
+        .getByRole("heading", { name: "Workspace setup", exact: true })
+        .isVisible(),
+      "Blocked campaign intent navigates to actionable workspace setup",
+    );
+    equal(
+      await page.getByRole("dialog").count(),
+      0,
+      "Blocked campaign intent does not strand the user in a disabled form",
+    );
+    for (const item of setup.checks) {
+      await page.getByText(item.title, { exact: true }).first().waitFor();
+      const summary = page.locator("summary").filter({ hasText: item.title });
+      const detail = page.getByText(item.detail, { exact: true }).first();
+      if (!(await detail.isVisible())) await summary.click();
+      await detail.waitFor({ state: "visible" });
+      check(
+        await detail.isVisible(),
+        `Setup UI displays actual diagnostics for ${item.id}`,
+      );
+      const stateLabels = {
+        ready: "Ready",
+        action_required: "Action needed",
+        unavailable: "Unavailable",
+        not_checked: "Not checked",
+      };
+      check(
+        await summary
+          .getByText(stateLabels[item.state], { exact: true })
+          .isVisible(),
+        `Setup UI reflects the measured ${item.id} state`,
+      );
+    }
+    const refreshResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/setup" &&
+        response.request().method() === "GET",
+    );
+    await page
+      .getByRole("button", { name: "Check setup", exact: true })
+      .click();
+    equal(
+      (await refreshResponse).status(),
+      200,
+      "Check setup fetches actual current diagnostics without a provider request",
+    );
+    await page.screenshot({
+      path: "artifacts/functional-journey/setup-diagnostics.png",
+      fullPage: true,
+    });
+    await page.goto(
+      `${origin}/app/findings?q=no-such-conversation&outcome=violation&page=2`,
+    );
+    await page
+      .getByRole("button", { name: "Clear filters", exact: true })
+      .waitFor();
+    check(
+      await page
+        .getByRole("button", { name: "Clear filters", exact: true })
+        .isVisible(),
+      "Empty filtered findings provide a working filter reset action",
+    );
+    equal(
+      await page
+        .getByRole("textbox", { name: "Search all findings", exact: true })
+        .inputValue(),
+      "no-such-conversation",
+      "Filtered findings reflect the bookmarked search before reset",
+    );
+    await page
+      .getByRole("button", { name: "Clear filters", exact: true })
+      .click();
+    await page.waitForURL(
+      (url) =>
+        !url.searchParams.has("q") &&
+        !url.searchParams.has("outcome") &&
+        !url.searchParams.has("page"),
+    );
+    equal(
+      await page
+        .getByRole("textbox", { name: "Search all findings", exact: true })
+        .inputValue(),
+      "",
+      "Filter reset clears the actual findings search input",
+    );
+    equal(
+      await page
+        .getByRole("combobox", { name: "Filter outcomes", exact: true })
+        .inputValue(),
+      "all",
+      "Filter reset restores the all-outcomes selection",
+    );
+    await page.reload();
+    await page
+      .getByRole("textbox", { name: "Search all findings", exact: true })
+      .waitFor();
+    equal(
+      await page
+        .getByRole("textbox", { name: "Search all findings", exact: true })
+        .inputValue(),
+      "",
+      "Reset findings state survives direct reload",
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    check(
+      !(await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      )),
+      "Actual first-use findings fit a phone viewport without horizontal overflow",
+    );
+    await page.screenshot({
+      path: "artifacts/functional-journey/empty-findings-mobile.png",
+      fullPage: true,
+    });
+    equal(
+      (await admin.query("SELECT count(*)::int AS count FROM targets")).rows[0]
+        .count,
+      1,
+      "First-use browser actions persist only the explicitly registered target",
+    );
+    equal(
+      (await admin.query("SELECT count(*)::int AS count FROM campaigns"))
+        .rows[0].count,
+      0,
+      "Incomplete prerequisites cannot create a campaign through browser actions",
+    );
+    equal(
+      (await admin.query("SELECT count(*)::int AS count FROM runs")).rows[0]
+        .count,
+      0,
+      "First-use browser actions create no fake conversation evidence or dispatch jobs",
+    );
+    equal(
+      externalRequests,
+      [],
+      "Functional browser journey makes no external provider or third-party requests",
+    );
+    equal(
+      errors,
+      [],
+      "Actual browser-to-API journey completes without page errors",
+    );
+  } catch (error) {
+    await page
+      .screenshot({
+        path: "artifacts/functional-journey/failure.png",
+        fullPage: true,
+      })
+      .catch(() => undefined);
+    throw error;
+  } finally {
+    await browser.close();
+  }
+  firstUseAssertions = checks.length - initialChecks;
+}
+
+async function stopWorker() {
+  if (!worker || worker.exitCode !== null || worker.signalCode !== null) return;
+  const child = worker;
+  const exited = new Promise<void>((resolve) =>
+    child.once("exit", () => resolve()),
+  );
+  child.kill("SIGTERM");
+  await Promise.race([exited, delay(5000)]);
+  if (child.exitCode === null && child.signalCode === null) {
+    child.kill("SIGKILL");
+    await exited;
+  }
+  worker = undefined;
+}
+async function zeroJobWorkerJourney() {
+  assert.ok(admin);
+  const jobs = (
+    await admin.query(
+      "SELECT (SELECT count(*) FROM campaigns)::int AS campaigns,(SELECT count(*) FROM runs)::int AS runs,(SELECT count(*) FROM live_executions)::int AS executions",
+    )
+  ).rows[0];
+  equal(
+    jobs,
+    { campaigns: 0, runs: 0, executions: 0 },
+    "Real worker heartbeat acceptance starts only in a fresh zero-job database",
+  );
+  // This guarded zero-job process is stopped before any report test records are
+  // inserted. Its live switch is off and no provider credentials are inherited.
+  worker = spawn(
+    process.execPath,
+    ["--import", "tsx", "apps/api/src/worker.ts"],
+    {
+      cwd: process.cwd(),
+      env: applicationEnvironment("local"),
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  let workerLog = "";
+  for (const stream of [worker.stdout, worker.stderr])
+    stream?.on("data", (chunk: Buffer) => {
+      workerLog = (workerLog + chunk.toString("utf8")).slice(-4000);
+    });
+  try {
+    let ready = false;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      if (worker.exitCode !== null || worker.signalCode !== null)
+        throw new Error(
+          `Isolated zero-job worker exited before readiness. ${workerLog.replaceAll(password, "[redacted]").replaceAll(databaseUrl, "[redacted]")}`,
+        );
+      const response = await request("/api/setup");
+      const setup = setupSchema.parse(response.body);
+      if (
+        setup.checks.find((item) => item.id === "worker")?.state === "ready"
+      ) {
+        ready = true;
+        break;
+      }
+      await delay(200);
+    }
+    check(
+      ready,
+      "Actual zero-job worker records a successful shared database heartbeat",
+    );
+    execFileSync(
+      process.execPath,
+      ["--import", "tsx", "apps/api/src/operations/health.ts", "worker-health"],
+      {
+        env: applicationEnvironment("local"),
+        stdio: "pipe",
+        timeout: 10000,
+      },
+    );
+    check(
+      true,
+      "Real worker health CLI accepts the matching healthy file and database instance",
+    );
+  } finally {
+    await stopWorker();
+  }
+  equal(
+    (await admin.query("SELECT count(*)::int AS count FROM runs")).rows[0]
+      .count,
+    0,
+    "Zero-job worker acceptance creates no dispatch runs",
+  );
+  await admin.query(
+    "UPDATE service_heartbeats SET checked_at=now()-interval '121 seconds',last_success_at=now()-interval '121 seconds'",
+  );
+  const stale = setupSchema.parse((await request("/api/setup")).body);
+  equal(
+    stale.checks.find((item) => item.id === "worker")?.state,
+    "unavailable",
+    "Shared diagnostics reject an expired worker heartbeat",
+  );
+  let rejectedStale = false;
+  try {
+    execFileSync(
+      process.execPath,
+      ["--import", "tsx", "apps/api/src/operations/health.ts", "worker-health"],
+      {
+        env: applicationEnvironment("local"),
+        stdio: "pipe",
+        timeout: 10000,
+      },
+    );
+  } catch {
+    rejectedStale = true;
+  }
+  check(
+    rejectedStale,
+    "Health CLI rejects stale database status even while its file mirror exists",
+  );
+  await admin.query(
+    "UPDATE service_heartbeats SET state='failed',checked_at=now()",
+  );
+  const failed = setupSchema.parse((await request("/api/setup")).body);
+  equal(
+    failed.checks.find((item) => item.id === "worker")?.state,
+    "unavailable",
+    "Shared diagnostics reject an explicit failed worker tick",
+  );
+  check(
+    /failed/i.test(
+      failed.checks.find((item) => item.id === "worker")?.detail ?? "",
+    ),
+    "Failed heartbeat diagnostics explain the worker database-tick failure",
+  );
+}
+
 const records: {
   runId: string;
   campaignId: string;
@@ -321,7 +842,7 @@ async function main() {
   databaseUrl = `postgres://${databaseUser}:${password}@127.0.0.1:${port}/${databaseName}`;
   for (const key of Object.keys(process.env))
     if (
-      /^(?:DATABASE_|BOLNA_|TWILIO_|VOUCH_|DOTENV_|AUTHORIZED_PHONE_NUMBERS$|PUBLIC_ORIGIN$|HOST$|PORT$|NODE_ENV$)/.test(
+      /^(?:DATABASE_|TEST_DATABASE_URL$|SUPABASE_|PG[A-Z_]+$|BOLNA_|TWILIO_|VOUCH_|DOTENV_|AUTHORIZED_PHONE_NUMBERS$|PUBLIC_ORIGIN$|HOST$|PORT$|NODE_ENV$)/.test(
         key,
       )
     )
@@ -436,6 +957,8 @@ async function main() {
     firstLedger,
     "Restoring isolated ledger checksum permits unchanged migrations again",
   );
+  await firstUseJourney();
+  await zeroJobWorkerJourney();
   const targetId = await seedRecords();
   equal(
     (
@@ -789,6 +1312,11 @@ async function main() {
     401,
     "Session mode rejects anonymous report access",
   );
+  equal(
+    (await request("/api/setup")).status,
+    401,
+    "Session mode protects setup diagnostics from anonymous access",
+  );
   const login = await request("/api/auth/login", {
     body: { email: "report-owner@example.test", password },
   });
@@ -817,6 +1345,11 @@ async function main() {
     (await request("/api/findings", { cookie })).status,
     200,
     "Authenticated owner can read owned reports",
+  );
+  equal(
+    (await request("/api/setup", { cookie })).status,
+    200,
+    "Authenticated owner can inspect actual workspace diagnostics",
   );
   equal(
     (
@@ -918,6 +1451,7 @@ async function main() {
     JSON.stringify({
       status: "passed",
       assertions: checks.length,
+      firstUseAssertions,
       testRecords: records.length,
       providerCalls: 0,
       report: "artifacts/report-api-regression.json",
@@ -937,6 +1471,7 @@ try {
   console.error(`Completed assertions before failure ${checks.length}`);
   process.exitCode = 1;
 } finally {
+  await stopWorker();
   await stopApi();
   await endApplicationDatabase?.().catch(() => undefined);
   await admin?.end().catch(() => undefined);

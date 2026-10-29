@@ -8,8 +8,14 @@ import {
 } from "react";
 import { api } from "../lib";
 import type { Overview, Run, FindingsPage } from "../types";
+import type { SetupStatus } from "../../../../../packages/core/src/setup";
 
-type Snapshot<T> = { key: string | null; data: T | null; error: string };
+type Snapshot<T> = {
+  key: string | null;
+  data: T | null;
+  error: string;
+  loading: boolean;
+};
 type PendingRequest = { controller: AbortController; promise: Promise<void> };
 type Lifecycle = { path: string | null; pending: PendingRequest | null };
 type Publish<T> = Dispatch<SetStateAction<Snapshot<T>>>;
@@ -39,11 +45,11 @@ async function receiveData<T>(
   try {
     const data = await requestData<T>(path, controller);
     if (isCurrent(lifecycle, path, controller))
-      publish({ key: path, data, error: "" });
+      publish({ key: path, data, error: "", loading: false });
   } catch (error) {
     if (!isCurrent(lifecycle, path, controller)) return;
     const message = requestMessage(error);
-    publish((previous) => ({ ...previous, error: message }));
+    publish((previous) => ({ ...previous, error: message, loading: false }));
     onError?.(message);
   } finally {
     if (isCurrent(lifecycle, path, controller)) lifecycle.pending = null;
@@ -58,7 +64,7 @@ function refreshData<T>(
   if (!path || lifecycle.path !== path) return Promise.resolve();
   if (lifecycle.pending) return lifecycle.pending.promise;
   const controller = new AbortController();
-  publish((previous) => ({ ...previous, error: "" }));
+  publish((previous) => ({ ...previous, error: "", loading: true }));
   const promise = receiveData(lifecycle, path, controller, publish, onError);
   lifecycle.pending = { controller, promise };
   return promise;
@@ -94,6 +100,7 @@ function useApiData<T>(
     key: path,
     data: null,
     error: "",
+    loading: !!path,
   });
   const lifecycle = useRef<Lifecycle>({ path, pending: null });
   const refresh = useCallback(
@@ -108,13 +115,14 @@ function useApiData<T>(
   useEffect(() => {
     const current = lifecycle.current;
     current.path = path;
-    setSnapshot({ key: path, data: null, error: "" });
+    setSnapshot({ key: path, data: null, error: "", loading: !!path });
     void refresh();
     return () => cancelData(current);
   }, [path, refresh]);
   return {
     data: snapshot.key === path ? snapshot.data : null,
     error: snapshot.key === path ? snapshot.error : "",
+    loading: snapshot.key === path && snapshot.loading,
     refresh,
     reload,
   };
@@ -178,5 +186,11 @@ export function useFindings(search: string, outcome: string, page: number) {
   });
   const resource = useApiData<FindingsPage>(`/findings?${query}`);
   usePolling(resource.refresh, true, 10000);
+  return { ...resource, refresh: resource.reload };
+}
+
+export function useSetup() {
+  const resource = useApiData<SetupStatus>("/setup");
+  usePolling(resource.refresh, true, 30000);
   return { ...resource, refresh: resource.reload };
 }

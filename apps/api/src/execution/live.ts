@@ -1,3 +1,7 @@
+import {
+  isAuthorizedPhoneListConfigured,
+  isConfiguredSetting,
+} from "../../../../packages/core/src/setup";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { z } from "zod";
@@ -173,7 +177,9 @@ export function liveReadiness() {
     "VOUCH_BOLNA_MAX_CENTS_PER_MINUTE",
     "VOUCH_BOLNA_SETUP_CENTS",
   ];
-  const missing = required.filter((name) => !process.env[name]);
+  const missing = required.filter(
+    (name) => !isConfiguredSetting(process.env[name]),
+  );
   for (const name of ["VOUCH_EVIDENCE_SIGNING_KEY", "VOUCH_ARTIFACT_KEY"]) {
     const value = process.env[name];
     if (
@@ -223,7 +229,7 @@ export function liveReadiness() {
     missing.push("BOLNA_COST_UNIT");
   if (process.env.VOUCH_RATE_CEILING_CONFIRMED !== "true")
     missing.push("VOUCH_RATE_CEILING_CONFIRMED");
-  if (!process.env.AUTHORIZED_PHONE_NUMBERS?.trim())
+  if (!isAuthorizedPhoneListConfigured(process.env.AUTHORIZED_PHONE_NUMBERS))
     missing.push("AUTHORIZED_PHONE_NUMBERS");
   if (!new BolnaRuntime().capabilities().cancellation)
     missing.push("VALID_TWILIO_CALL_CONTROL");
@@ -240,8 +246,8 @@ export function liveReadiness() {
   )
     missing.push("VOUCH_SYNTHETIC_CHALLENGE");
   return {
-    configured: !!process.env.BOLNA_API_KEY,
-    agentConfigured: !!process.env.BOLNA_AGENT_ID,
+    configured: isConfiguredSetting(process.env.BOLNA_API_KEY),
+    agentConfigured: isConfiguredSetting(process.env.BOLNA_AGENT_ID),
     verified: false,
     enabled: missing.length === 0,
     reason: missing.length
