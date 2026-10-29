@@ -1,6 +1,6 @@
 # Durable live campaigns
 
-The live worker implements a separate state machine around the Bolna caller. It preserves the fixture path and uses the same PostgreSQL-backed queue and deterministic evaluator. The coding path is implemented; no provider call or voice acceptance test was run for this change.
+The worker executes provider-backed Bolna calls through a durable PostgreSQL queue and deterministic evaluator. It does not simulate conversations or account changes. Historical synthetic records remain archived and cannot be executed by this worker. Provider acceptance still requires configured credentials and an authorized target.
 
 ## Required operator configuration
 
@@ -68,7 +68,7 @@ Every worker takes the same PostgreSQL session advisory lock. That lock spans sh
 
 The Twilio duration update is recorded after success and applied once per execution rather than extending or resetting it on every poll.
 
-The next worker loads active work before claiming new jobs. It resumes polling a known execution, reconciles an unknown one or waits for final evidence. Fixtures also use the same lock and cannot execute beside an unresolved live call. Heartbeat output supports container health checks.
+The next worker loads active work before claiming new jobs. It resumes polling a known execution, reconciles an unknown one or waits for final evidence. The normal worker has no fixture execution path. Historical synthetic queue rows are excluded from live job selection. Heartbeat output supports container health checks.
 
 ## Evidence finalization
 
@@ -84,4 +84,4 @@ After a run has a terminal provider state, finalized cost and completed evidence
 
 Cleanup runs on an independent connection with its own lock after releasing the voice-call lock. Failed deletions use exponential backoff up to one day and do not block call polling or occupy the voice slot. Attempts, retry time, safe error and successful deletion timestamp remain persisted. A worker restart can recover an interrupted deletion; an already-absent caller is treated idempotently. A stopped run with an unknown caller-creation outcome keeps a read-only lookup job even when its caller identifier is still unknown. It never creates another caller to recover that state. Captured model configuration, prompts, caller identifier and evidence stay in the run after provider cleanup. Worker snapshots retain lifecycle and billing metadata without duplicating transcript text or recording source URLs.
 
-The benign live caller requires an operator-configured `VOUCH_SYNTHETIC_CHALLENGE` matching the fictional sandbox account. Its value and resulting prompt are captured in the immutable configuration. The false-authority prompt is not given that challenge. Existing fixture scenarios and their captured configurations are unchanged.
+The benign live caller requires an operator-configured `VOUCH_SYNTHETIC_CHALLENGE` matching the fictional sandbox account. Its value and resulting prompt are captured in the immutable configuration. The false-authority prompt is not given that challenge. This identity is authorized test input to an actual provider call, not a simulated execution. Historical scenario snapshots remain stored without being replayed.

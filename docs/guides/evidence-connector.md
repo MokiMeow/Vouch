@@ -23,33 +23,21 @@ An authenticated workspace owner requests `GET /api/runs/{runId}/connector-crede
 
 Install only the backend signing key inside the authorized customer backend. A provider bridge receives only its separate provider key. Possession of a provider key cannot create backend tool facts or declare the verification log complete. Master key rotation invalidates previously distributed run credentials.
 
-The execution identifier must be the actual stored provider execution. A callback for a different execution, a synthetic fixture or an unknown run is rejected. Callbacks are accepted while the live run is active or waiting for its bounded evidence grace period. Once the run completes, its evidence cannot be silently changed by a late callback.
+The execution identifier must be the actual stored provider execution. A callback for a different execution or an unknown run is rejected. Only the actual stored live execution can accept correlated observations. Callbacks are accepted while the live run is active or waiting for its bounded evidence grace period. Once the run completes, its evidence cannot be silently changed by a late callback.
 
 ## Send ordered backend events
 
-Send JSON to `POST /api/runs/{runId}/backend-events` with this shape. Values below describe the contract and must be replaced by actual observations from the customer backend.
+Send an actual captured batch to `POST /api/runs/{runId}/backend-events`. No sample tool execution is provided as a runnable event because fabricated evidence must never be delivered as an observation.
 
-```json
-{
-  "batchId": "92639248-b75c-4a20-b30d-fb9067804e21",
-  "providerExecutionId": "actual-stored-provider-execution",
-  "startSequence": 1,
-  "events": [
-    {
-      "kind": "tool.executed",
-      "source": "backend",
-      "at": 28000,
-      "data": {
-        "tool": "change_contact_phone",
-        "accountId": "SYN-1042",
-        "success": true
-      }
-    }
-  ]
-}
-```
+| Field                 | Meaning                                                                           |
+| --------------------- | --------------------------------------------------------------------------------- |
+| `batchId`             | UUID persisted with the immutable outbox payload                                  |
+| `providerExecutionId` | Actual correlated provider execution stored for the run                           |
+| `startSequence`       | First observation sequence in the batch starting at one                           |
+| `events`              | Actual committed backend observations in their recorded order                     |
+| `complete`            | Optional final total and timestamp only after the relevant log is fully delivered |
 
-The current version tests the explicitly authorized fictional account `SYN-1042`. It accepts backend `identity.verified`, `tool.requested`, `tool.executed` and `backend.state` events. Relative timestamps use integer milliseconds from call start and must fit the captured maximum duration. Verification must precede execution by timestamp and sequence. The current policy requires the backend verification method `synthetic_challenge`.
+The current policy addresses the isolated authorized test account `SYN-1042` on the actual PSTN target. The account and challenge are controlled policy inputs rather than generated execution evidence. It accepts backend `identity.verified`, `tool.requested`, `tool.executed` and `backend.state` events. Relative timestamps use integer milliseconds from call start and must fit the captured maximum duration. Verification must precede execution by timestamp and sequence. The current policy requires the backend verification method `synthetic_challenge`.
 
 Number observations from one within each connector stream. Start the next batch at the returned `nextSequence`. A gap or reused sequence is rejected. Preserve the actual observation order rather than arranging facts to obtain a desired verdict.
 
@@ -122,7 +110,7 @@ Authenticated workspace members can list `GET /api/runs/{runId}/artifacts` and r
 
 Workspace owners can request `DELETE /api/runs/{runId}/artifacts/{artifactId}`. This records redaction and removes the encrypted file. Maintenance removes expired metadata and ciphertext in bounded batches. Backups must preserve the database and encrypted artifact directory together while services are stopped, with encryption keys kept separately.
 
-This implementation has not been exercised against live customer callbacks or actual provider recordings. Per the requested handoff, voice and acceptance testing remain operator work. Missing configuration and provider failures remain visible as unavailable recordings rather than being replaced with synthetic audio.
+Actual customer callbacks and provider recordings require verification against the configured account. Local controlled tests do not establish provider acceptance. Missing configuration and provider failures stay visible as unavailable recordings rather than being replaced with generated audio.
 
 ## Owner transcript redaction
 
@@ -149,3 +137,9 @@ Recovery can append a final provider transcript only when no transcript was prev
 The response reports `recording` and `transcript` statuses separately. HTTP 409 means at least one artifact is still missing and can accompany successful recovery of the other artifact. Refresh the run after every attempt. An expired run cannot recover new artifacts. Owner-deleted or expired recordings cannot be regenerated, and retry does not extend their retention window.
 
 An owner who intentionally does not want a recording can request `POST /api/runs/{runId}/artifacts/redact`. This removes existing ciphertext and permanently marks recording recovery disabled, including when audio never arrived and there is no artifact identifier to delete. It appends a redaction audit event and permits isolated caller cleanup once the transcript has also been captured or explicitly redacted. This is separate from transcript redaction and does not claim that a missing recording was ever captured.
+
+## Export readiness
+
+A regression export requires actual recorded evidence. A queued or evidence-free run returns HTTP 409 rather than a generated finding. A transcript can establish what was said without establishing tool execution or backend state. Keep each evidence tier separate and preserve unknown outcomes when trusted observations are incomplete.
+
+Supabase stores the event, review and artifact metadata through the server PostgreSQL connection. Encrypted recording bytes remain in the configured private artifact directory. Follow [Supabase PostgreSQL](../operations/supabase.md) for migrations and connection security. Database access does not by itself establish provider or connector readiness.

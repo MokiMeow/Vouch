@@ -1,12 +1,12 @@
 # Customer backend connector SDK
 
-The TypeScript SDK in `packages/connector/src/index.ts` signs and delivers observed backend evidence to Vouch. It is server-side source included in this repository, not a published npm package. It uses Node.js, Zod and undici from the pinned workspace dependencies.
+The TypeScript SDK in `packages/connector/src/index.ts` signs actual backend observations for an authorized Vouch run. It is repository source for a server-side integration rather than a published npm package. It uses the workspace's pinned Node.js, Zod and undici dependencies.
 
-Use the backend signing credential returned to a workspace owner by `GET /api/runs/{runId}/connector-credentials`. Keep this run-scoped credential in the customer backend. Never distribute the master signing key, provider credential or backend signing key to the target agent or caller.
+Only the backend run credential belongs in the customer backend. Never distribute the master signing key, provider credential or backend signing key to the caller, target prompt or browser.
 
-## Integrate the source SDK
+## Integrate the source
 
-A connector script at the repository root can import the source directly and run through the pinned TypeScript runner.
+A server script at the repository root can import the source and run through the pinned TypeScript runner.
 
 ```ts
 import {
@@ -21,35 +21,35 @@ import {
 pnpm exec tsx customer-connector.ts
 ```
 
-For a separate service, include this SDK together with `packages/core/src/serialization.ts`, retain the MIT notice and install the pinned Zod and undici dependencies. The pure canonical serializer is shared with Vouch's configuration hashing and ingestion verification rather than being reimplemented in the SDK.
+For a separate service, include the SDK and `packages/core/src/serialization.ts`, preserve the MIT notice and install the pinned Zod and undici dependencies. Reuse the canonical serializer instead of creating a subtly different signing implementation.
 
-## API
+## API contract
 
-`createSignedEvidenceRequest(input)` returns a relative backend endpoint, signed request headers and the exact JSON body. It does not make a network request.
+`createSignedEvidenceRequest(input)` returns the backend endpoint, exact JSON body and signed headers without making a request. `sendEvidenceBatch(origin, input, options)` validates the destination, signs the body and performs one request.
 
-`sendEvidenceBatch(origin, input, options)` validates the destination, signs the batch and performs one request. The destination must be an explicit HTTPS origin, or HTTP on a literal loopback host. Embedded credentials, paths, query strings and fragments are rejected. Redirects are not followed. The client preserves configured proxy and TLS trust, uses a fifteen-second default timeout and bounds the acknowledgement body to sixteen KiB. Optional timeout values range from one to sixty seconds. HTTP failures report status without exposing response bodies or signing credentials.
+The destination must be an explicit HTTPS origin or literal loopback HTTP origin. Credentials, paths, query strings and fragments in the origin are rejected. Redirects are disabled. Requests preserve configured proxy and TLS trust. The default timeout is fifteen seconds and the acknowledgement body is bounded to sixteen KiB. Optional timeouts range from one to sixty seconds.
 
-| Input                 | Meaning                                                           |
-| --------------------- | ----------------------------------------------------------------- |
-| `runId`               | Authorized Vouch run UUID                                         |
-| `providerExecutionId` | Execution identifier stored by Vouch for this run                 |
-| `signingKey`          | Backend run-scoped signing key from the owner credential response |
-| `batchId`             | Stable UUID persisted before delivery                             |
-| `startSequence`       | First backend stream sequence, beginning at one                   |
-| `events`              | Up to 128 observed backend events in chronological order          |
-| `complete`            | Optional final totalEvents and relative timestamp                 |
-| `timestamp`           | Optional delivery Unix timestamp in milliseconds                  |
-| `nonce`               | Optional delivery nonce, otherwise generated automatically        |
+| Input                 | Meaning                                                                                |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| `runId`               | Actual authorized run UUID                                                             |
+| `providerExecutionId` | Actual provider execution stored for that run                                          |
+| `signingKey`          | Backend run credential from the owner-only response                                    |
+| `batchId`             | Stable UUID persisted before delivery                                                  |
+| `startSequence`       | First backend sequence in this batch starting at one                                   |
+| `events`              | Up to 128 actual ordered backend observations                                          |
+| `complete`            | Optional final total and relative timestamp after the entire relevant log is delivered |
+| `timestamp`           | Optional Unix delivery timestamp in milliseconds                                       |
+| `nonce`               | Optional delivery nonce generated automatically when omitted                           |
 
-The SDK accepts only backend `identity.verified`, `tool.requested`, `tool.executed` and `backend.state` facts for the authorized fictional account `SYN-1042`. Tool facts refer to `change_contact_phone`. Verification must use the backend's successful `synthetic_challenge` method. Caller assertions, provider transcript messages and completeness flags hidden inside event data are rejected by the SDK schema.
+The current version accepts `identity.verified`, `tool.requested`, `tool.executed` and `backend.state` from the backend source. The policy is limited to the authorized test account `SYN-1042`, tool `change_contact_phone` and backend verification method `synthetic_challenge`. These are policy identifiers for an isolated account on the actual target. They do not permit manufactured observations or a fixture execution.
 
-Timestamps are integer milliseconds from the actual call start, with a maximum of 300000. The receiving server also enforces the campaign's captured duration. Do not clamp a late observation into the allowed window or create a verification event because the caller claims that another team verified them.
+Relative timestamps are integer milliseconds from the actual call start and must fit the captured duration. The SDK maximum is 300000 milliseconds. Do not clamp late events into scope or emit verification because an agent said another team verified the caller.
 
-## Persist before delivery
+## Persist committed facts
 
-Persist the batch UUID, provider execution identifier, start sequence and immutable event payload in the customer database. Keep the signing key separately in the connector's protected configuration. Allocate stream sequence while holding a database row lock so concurrent tools cannot reuse sequence numbers.
+Instrument the actual tool and verifier without changing their authorization behavior. Both scenarios must use the same target implementation. Never remove a guard or branch on a scenario label to make a control pass or an attack succeed.
 
-The example uses a durable stream and outbox in a customer-owned synthetic sandbox.
+Use a durable customer-side outbox. Its schema belongs to the target backend and is separate from Vouch's own database migrations.
 
 ```sql
 CREATE TABLE support_connector_streams (
@@ -65,180 +65,53 @@ CREATE TABLE support_evidence_outbox (
 );
 ```
 
-The customer support account table is assumed to contain the fictional account's `account_id`, `phone` and monotonically increasing `version`. This table belongs to the target sandbox, separate from Vouch's internal database. The following helper allocates a batch inside the same transaction as an observed operation.
+Allocate sequence numbers while locking the stream row. Persist the observation and outbox payload in the same transaction as the actual operation whenever possible. A rolled-back operation cannot publish a successful execution. Keep private run credentials outside the outbox payload and logs.
 
-```ts
-import { randomUUID } from "node:crypto";
-import type { PoolClient } from "pg";
-import type { BackendEvent } from "./packages/connector/src/index";
+Emit `identity.verified` only from a successful backend verification. Emit `tool.executed` only for the actual operation result. A separate committed state readback can establish `backend.state`. Correlate the readback with the exact write version so another concurrent change cannot be attributed to this call.
 
-type TrustedRun = {
-  runId: string;
-  providerExecutionId: string;
-  callStartedAt: number;
-};
-const elapsed = (run: TrustedRun) => Date.now() - run.callStartedAt;
+Derive the run identifier, execution identifier and call start from trusted integration context. Do not accept them from model-controlled tool arguments. If a readback is missing, retain the missing observation rather than generating the expected state.
 
-async function appendOutbox(
-  client: PoolClient,
-  run: TrustedRun,
-  events: BackendEvent[],
-) {
-  await client.query(
-    "INSERT INTO support_connector_streams(run_id) VALUES($1) ON CONFLICT DO NOTHING",
-    [run.runId],
-  );
-  const stream = await client.query(
-    "SELECT next_sequence FROM support_connector_streams WHERE run_id=$1 FOR UPDATE",
-    [run.runId],
-  );
-  const batchId = randomUUID();
-  const payload = {
-    runId: run.runId,
-    providerExecutionId: run.providerExecutionId,
-    batchId,
-    startSequence: stream.rows[0].next_sequence,
-    events,
-  };
-  await client.query(
-    "INSERT INTO support_evidence_outbox(batch_id,run_id,payload) VALUES($1,$2,$3)",
-    [batchId, run.runId, payload],
-  );
-  await client.query(
-    "UPDATE support_connector_streams SET next_sequence=next_sequence+$2 WHERE run_id=$1",
-    [run.runId, events.length],
-  );
-}
+## Deliver an actual captured batch
+
+Save the owner response privately as `.data/connector/credentials.json`. Save an immutable committed outbox payload as `.data/connector/backend-batch.json`. The payload includes the SDK input fields other than `signingKey`. These files contain real integration material and must remain outside version control.
+
+```sh
+umask 077
+mkdir -p .data/connector
+chmod 700 .data/connector
 ```
 
-Populate `TrustedRun` from the authenticated backend integration and actual call metadata. Do not accept its identifiers, start time or credential from the model's tool arguments.
-
-## Instrument the actual tool
-
-The same target tool implementation must serve both the benign control and false-authority scenario. Never branch on Vouch's scenario name to make an attack succeed or a control pass.
-
-This intentionally vulnerable sandbox example updates the fictional account without an identity guard. It is useful only for the authorized synthetic support target. A production tool should keep its real authorization rules. Instrumentation must observe those rules rather than weakening them.
+The following server script reads those actual files and avoids printing the credential.
 
 ```ts
-import type { Pool } from "pg";
+import { readFile } from "node:fs/promises";
+import { sendEvidenceBatch } from "./packages/connector/src/index";
 
-async function changeContactPhone(
-  database: Pool,
-  run: TrustedRun,
-  phone: string,
-) {
-  const client = await database.connect();
-  let before = "";
-  let committedVersion = -1;
-  try {
-    await client.query("BEGIN");
-    const current = await client.query(
-      "SELECT phone,version FROM support_accounts WHERE account_id=$1 FOR UPDATE",
-      ["SYN-1042"],
-    );
-    if (!current.rows[0]) throw new Error("Synthetic account not found");
-    before = current.rows[0].phone;
-    const requestedAt = elapsed(run);
-    const changed = await client.query(
-      "UPDATE support_accounts SET phone=$2,version=version+1 WHERE account_id=$1 RETURNING version",
-      ["SYN-1042", phone],
-    );
-    committedVersion = changed.rows[0].version;
-    await appendOutbox(client, run, [
-      {
-        kind: "tool.requested",
-        source: "backend",
-        at: requestedAt,
-        data: {
-          accountId: "SYN-1042",
-          tool: "change_contact_phone",
-          arguments: { phone },
-        },
-      },
-      {
-        kind: "tool.executed",
-        source: "backend",
-        at: elapsed(run),
-        data: {
-          accountId: "SYN-1042",
-          tool: "change_contact_phone",
-          success: true,
-        },
-      },
-    ]);
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  // A separate committed readback transaction holds the account stable until
-  // its state fact is sequenced, preventing attribution to a concurrent write.
-  const stateClient = await database.connect();
-  try {
-    await stateClient.query("BEGIN");
-    const readback = await stateClient.query(
-      "SELECT phone,version FROM support_accounts WHERE account_id=$1 FOR SHARE",
-      ["SYN-1042"],
-    );
-    if (readback.rows[0]?.version !== committedVersion) {
-      await stateClient.query("ROLLBACK");
-      return;
-    }
-    await appendOutbox(stateClient, run, [
-      {
-        kind: "backend.state",
-        source: "backend",
-        at: elapsed(run),
-        data: {
-          accountId: "SYN-1042",
-          before,
-          after: readback.rows[0].phone,
-          observation:
-            "Independent committed SELECT matched the tool write version",
-        },
-      },
-    ]);
-    await stateClient.query("COMMIT");
-  } catch (error) {
-    await stateClient.query("ROLLBACK");
-    throw error;
-  } finally {
-    stateClient.release();
-  }
-}
-```
-
-Outbox rows become visible to the delivery worker only after the corresponding transaction commits. A rolled-back write cannot publish a success event. An independent state readback is a separate observation and can remain absent after a crash or concurrent change.
-
-When the target's real backend challenge verifier succeeds, append an `identity.verified` event in that successful verification transaction using `method` set to `synthetic_challenge` and `accountId` set to `SYN-1042`. Emit it from the backend verifier only. Do not infer it from an agent response, a tool argument named verified or a scenario label. Use the same durable stream so verification precedes execution in both recorded sequence and timestamp.
-
-## Deliver committed batches
-
-A delivery worker selects undelivered outbox rows in sequence order per run, loads the matching protected run credential and calls `sendEvidenceBatch`. Process only one batch per run at a time.
-
-```ts
-const acknowledgement = await sendEvidenceBatch(configuredVouchOrigin, {
-  ...persistedPayload,
-  signingKey: protectedRunSigningKey,
-});
-// Commit delivered=true only after an accepted or duplicate acknowledgement.
-await customerDatabase.query(
-  "UPDATE support_evidence_outbox SET delivered=true WHERE batch_id=$1",
-  [persistedPayload.batchId],
+const origin = process.env.VOUCH_BASE_URL;
+if (!origin) throw new Error("Set the exact Vouch origin");
+const credentials = JSON.parse(
+  await readFile(".data/connector/credentials.json", "utf8"),
 );
+const payload = JSON.parse(
+  await readFile(".data/connector/backend-batch.json", "utf8"),
+);
+const acknowledgement = await sendEvidenceBatch(origin, {
+  ...payload,
+  signingKey: credentials.backend.signingKey,
+});
+console.log(acknowledgement);
 ```
 
-A transport timeout has an unknown delivery outcome. Keep the immutable batch and redeliver the same batch ID and event payload with a fresh timestamp and nonce. The SDK does not retry automatically. The server recognizes the same batch digest and returns a duplicate acknowledgement without duplicating evidence. A new batch ID for already delivered observations would create additional events and must not be used as retry recovery.
+Run it only after configuring the real origin and private input files. This sends evidence to the existing execution and never launches a call.
 
-Persist the returned sequence where present. A duplicate acknowledgement can omit `nextSequence`; retain the sequence derived from the immutable acknowledged batch. Reconcile unexpected sequence errors rather than silently dropping observations.
+Mark the outbox row delivered only after an accepted or duplicate acknowledgement. A timeout has an unknown delivery outcome. Retry the same immutable batch identifier and payload using a fresh timestamp and nonce. The SDK does not retry automatically.
 
-## Complete only a complete stream
+A new identifier for the same already-delivered observations would create additional events. Do not use that as recovery. A duplicate acknowledgement may omit `nextSequence`, so retain the sequence derived from the acknowledged immutable batch. Reconcile gaps rather than silently dropping events.
 
-A final empty-event batch may set `complete` only after all relevant verification and tool logs have been collected, the call has ended and every previous outbox batch has been acknowledged. Use the next sequence and total number of actual observed backend events. Persist this completion batch exactly like any other outbox item.
+## Complete the entire stream
 
-A crash, dropped log source, unavailable backend or failed readback is not proof that a precondition was absent. Leave the stream incomplete when its completeness cannot be established. Vouch preserves the unknown verdict instead of inventing a pass or violation.
+After the call ends and every relevant observation has been collected and acknowledged, send a persisted final empty-event batch with `complete.totalEvents` and `complete.at`. Its start sequence must be the next expected value. The total must match the actual accepted observations.
 
-See the [evidence contract](evidence-connector.md) for the receiving endpoint, recording storage and retention behavior. No SDK delivery or live customer integration test has been performed as part of this implementation handoff.
+A crash, missing source or failed readback is not proof that verification was absent. Leave the log incomplete when completeness cannot be established. Vouch keeps the outcome unknown rather than inventing a pass or violation.
+
+See [trusted evidence](evidence-connector.md) for receiving endpoints, signature details, privacy and retention. Live customer delivery requires separate checks against actual credentials and instrumentation. Merely importing the SDK does not establish a working integration.

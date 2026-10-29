@@ -1,14 +1,14 @@
 # Vouch documentation
 
-Start with [project status](project-status.md) for the implemented first-PSTN scope, operator configuration and acceptance work still pending. The [repository README](../README.md) provides installation commands and a source map.
+Start with [project status](project-status.md) for the implemented real PSTN workflow, verification results and credential-dependent acceptance boundaries. Normal setup does not seed calls, findings or dashboard statistics. Missing connections and evidence remain unavailable rather than being replaced with demo data. The [repository README](../README.md) provides installation commands and a source map.
 
 ## Setup and product guides
 
-- [Live Bolna setup](guides/bolna.md) covers the supported caller, carrier, fictional challenge and activation gates.
+- [Live Bolna setup](guides/bolna.md) covers the actual caller, carrier, isolated test-account challenge and activation gates.
 - [Authentication and workspaces](guides/authentication.md) explains session mode, owner bootstrap, memberships and tenant isolation.
 - [Backend evidence connector](guides/evidence-connector.md) defines signed delivery, continuous sequences, completeness and privacy behavior.
 - [Connector SDK](guides/connector-sdk.md) shows customer-side TypeScript and durable SQL outbox integration.
-- [Acceptance checklist](guides/acceptance.md) separates implemented capabilities from testing left to the operator.
+- [Acceptance checklist](guides/acceptance.md) separates implemented capabilities from local verification from actual account acceptance.
 
 ## Architecture and contracts
 
@@ -19,10 +19,14 @@ Start with [project status](project-status.md) for the implemented first-PSTN sc
 
 ## Operation
 
+- [Supabase PostgreSQL](operations/supabase.md) covers default database setup, TLS, separate migration credentials, versioned SQL and required role privileges. Docker is optional for a separate local database.
+
 - [Cloud startup](operations/cloud-start.md) restores managed development services without resetting data.
 - [Production deployment](operations/deployment.md) covers configuration, containers, health, retention and guarded backup/restore.
 
 ## Reports and history
+
+- [Current desktop report follow-up](reports/desktop-followup.md) records the reported fixes, selected design and isolated verification results.
 
 - [Repository audit](reports/repository-audit.md), [performance audit](reports/performance-audit.md) and [design verification](reports/design-qa.md) retain the historical fixture baseline. Their results are not acceptance of the later live/authentication expansion.
 - [Design notes](reports/design-redesign.md) explain the current visual system and preserve creator/license references.

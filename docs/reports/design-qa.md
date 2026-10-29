@@ -1,36 +1,30 @@
-> Historical fixture baseline. This design verification predates the live/authentication expansion. The expanded code received compilation and static review only because acceptance testing was left to the user. See [current handoff](../project-status.md).
+# Design verification
 
-# Vouch design verification
+Date October 29, 2026.
 
-final result: passed
+Final result passed for the bounded local UI checks below. Hosted Supabase, live calls, public publication and physical-device certification remain outside this result.
 
-Verified on 28 October 2026 against the user's redesign brief, the captured existing interface, the inspected OpenCode theme source and the original generated mascot assets. This is a redesign review rather than a claim of pixel-identical cloning of a reference website.
+The selected visual target was the second displayed concept, refined for a real-data-only setup state. Compared the generated target with actual captured desktop/mobile application screens. Implemented the cool-white/electric-blue palette, original ice-current background, translucent horizontal navigation, fine rules and open layouts. Omitted invented metrics and extra mock-only filters that are not supported by the product.
 
-## Checked surfaces
+## Captures inspected
 
-- Landing and credits
-- Overview, campaigns, findings, targets and integrations
-- Run evidence, review, rerun and regression export
-- All seven documentation chapters
+- Actual unconfigured application landing, workspace and quickstart at 1440px and 390px, with no response interception or manufactured records
+- Product overview, findings and evidence screens using isolated browser-only records for control/state verification
+- Responsive overflow checks from 320px through 2560px
 
-## Results
+Captures and machine-readable checks are under ignored `artifacts/current-ui/` and `artifacts/verification/`. Only the honest unconfigured workspace capture is copied to `docs/assets/dashboard.png` for the README.
 
-- The interface uses a shared neutral token layer, self-hosted Geist, Phosphor icons, original scout/builder illustrations and restrained violet accents.
-- Workspace descriptions are short. Returning workspaces use a smaller baseline panel so results appear earlier.
-- Mobile Docs is accessible through both the tab strip and a persistent shortcut. The tab strip shows a scrolling cue.
-- Documentation has chapter search, a table of contents, readable prose width, wrapped mobile tables, previous/next navigation and real command copying with failure feedback.
-- All image elements disable dragging and reject drag-start events. Documentation text and commands remain selectable.
-- Authored interface prose avoids em dashes and colons. Executable syntax and technical identifiers retain necessary punctuation.
-- Automated axe WCAG A/AA checks pass on the landing, overview, evidence, mobile integrations and every Docs chapter.
-- Layouts were checked at 320, 390, 768, 1440 and 2560px. Evidence also retains the existing 360 and 1920px checks.
-- The actual local campaign workflow passes through worker execution, evidence review, export and bounded rerun. Request-race and timeout recovery checks also pass.
+## Repairs verified
 
-The first integrated review found low-contrast metadata, clipped mobile table descriptions, hidden mobile Docs discovery and overly wide reading lines. Those findings were corrected and the affected pages were recaptured. No unresolved P1 or P2 design issue remains in the checked scope.
+- Limited the decorative background to the top 420–560px so it does not fight dense evidence text at wide viewports
+- Removed retired mascots and all illustrative fake evidence on the landing page
+- Replaced ambiguous row icons with a single native primary link and explicit Stop action
+- Fixed the mobile policy trace keyboard focus requirement
+- Removed the duplicate Docs input focus outline while retaining the visible wrapper ring
+- Verified separate-tab Docs, exact command copying, search, URL state, reload/Back and modal dismissal
 
-## Evidence
+Ten accessibility scans passed for landing, Docs, dashboard, findings and evidence at desktop/mobile widths. Six more passed on actual placeholder-only application pages. No new contrast violations, console errors or horizontal clipping were found in that scope.
 
-Rendered desktop/mobile captures are retained under ignored `artifacts/mission-control/`. They show the real running local product, with clearly synthetic campaign records and actual database-backed counts. Original before captures are retained alongside them.
+## Limits
 
-Run `pnpm test:browser`, `pnpm test:browser:design` and `pnpm test:browser:requests` after building and starting the documented local services. These are Chromium checks rather than certification of every physical device or assistive technology.
-
-OpenCode's pinned MIT source was inspected and credited. Tessory, Notion and SpaceX live websites were blocked by the current network policy, so no inaccessible source or proprietary component is claimed as inspected or copied. The current UI work does not enable live calling or make the local workspace production-authenticated.
+The real-data setup state was rendered against the actual local API without database credentials. Populated UI states were exercised with test-only browser interception, while actual SQL/API behavior was verified separately in temporary PostgreSQL. No real phone call or Supabase deployment was represented as successful. Screen-reader and physical-device testing still require the operator's acceptance process.

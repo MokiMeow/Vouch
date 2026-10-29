@@ -1,84 +1,85 @@
 # Authentication and workspace isolation
 
-Vouch supports a local fixture workspace and authenticated multi-workspace sessions. These modes share the product API but use different entry requirements. The authentication and database context implementation is in `apps/api/src/auth/service.ts` and `apps/api/src/database/client.ts`.
+The real-data workspace uses server sessions and PostgreSQL workspace isolation. Configure authentication privately before exposing the service. Supabase supplies PostgreSQL storage while Vouch owns its application sessions. Supabase publishable keys and browser authentication are not substitutes for this server configuration.
 
-## Local fixture mode
+## Server settings
 
-Nonproduction loopback development defaults to `VOUCH_AUTH_MODE=local`. This mode exposes a single local workspace without a password. Explicit local mode is rejected when `NODE_ENV=production` or when the API binds outside `127.0.0.1` and `localhost`.
+| Variable                    | Meaning                                                    |
+| --------------------------- | ---------------------------------------------------------- |
+| `VOUCH_AUTH_MODE`           | Use `session` for the authenticated workspace              |
+| `PUBLIC_ORIGIN`             | Exact browser origin without a trailing slash or path      |
+| `VOUCH_BOOTSTRAP_EMAIL`     | Initial owner email for an empty user database             |
+| `VOUCH_BOOTSTRAP_PASSWORD`  | Private initial password with at least fourteen characters |
+| `VOUCH_BOOTSTRAP_WORKSPACE` | Optional initial workspace name                            |
+| `VOUCH_SESSION_HOURS`       | Absolute lifetime from 1 to 168 hours with a default of 12 |
+| `VOUCH_COOKIE_SECURE`       | Use `true` for HTTPS development outside production        |
 
-Local mode is for fictional fixture data in a trusted development environment. It does not provide identity-based access control. It still uses the workspace database context and row-level isolation, which prevents accidental access to data belonging to an authenticated workspace.
+Production requires session mode and an HTTPS origin. Production cookies are always Secure. The application must not be exposed using a password-free development configuration. No automatic workspace data, campaign statistics or fake calls are created for onboarding.
 
-## Session mode
+Preserve the ignored environment file and generate only missing private signing and recording keys.
 
-Set these server environment variables through the deployment secret mechanism or ignored local `.env`.
+```sh
+test -e .env || (umask 077; cp .env.example .env)
+chmod 600 .env
+pnpm setup:secrets
+```
 
-| Variable                    | Meaning                                                  |
-| --------------------------- | -------------------------------------------------------- |
-| `VOUCH_AUTH_MODE`           | Set to `session` to require sign-in                      |
-| `PUBLIC_ORIGIN`             | Exact public origin without a trailing slash or path     |
-| `VOUCH_BOOTSTRAP_EMAIL`     | Initial owner email for an empty user database           |
-| `VOUCH_BOOTSTRAP_PASSWORD`  | Initial owner password with at least fourteen characters |
-| `VOUCH_BOOTSTRAP_WORKSPACE` | Optional initial workspace name                          |
-| `VOUCH_SESSION_HOURS`       | Session duration from one to 168 hours, default twelve   |
-| `VOUCH_COOKIE_SECURE`       | Set to `true` when using HTTPS outside production        |
+Fill actual database and owner values privately. Placeholders intentionally cannot establish a connection. Follow [Supabase PostgreSQL](../operations/supabase.md), then apply migrations and start the services.
 
-Production requires session mode and an HTTPS `PUBLIC_ORIGIN`. Production cookies are always secure, regardless of a false cookie setting. The server refuses incomplete first-owner configuration instead of silently starting an unauthenticated service.
+```sh
+pnpm db:migrate
+pnpm dev
+```
 
-Bootstrap creates the first owner once under a database advisory lock. Subsequent restarts do not reset credentials or overwrite existing users. Remove the initial bootstrap password from the deployment environment after the first successful sign-in and password rotation. Keep the account's password in an appropriate password manager.
+## First owner
 
-Passwords use per-user random salts and scrypt with N 32768, r 8, p 1 and a 64-byte derived key. Password comparisons use constant-time comparison. Plaintext passwords are not stored. Password changes require the current password and revoke all existing sessions for that user.
+Bootstrap creates the first owner once under a database advisory lock. Restarts do not overwrite existing users. Sign in, rotate the initial password and remove the bootstrap password from the runtime environment. Keep recovery access in an approved operator process.
+
+Passwords use per-user random salts and scrypt. Plaintext passwords are not stored. Password rotation requires the current password and revokes all sessions for that user. Provisioning a new member does not require an email service.
 
 ## Session behavior
 
-Sign-in creates a random 32-byte opaque token. Only its SHA-256 digest is stored in PostgreSQL. The browser receives an HttpOnly, SameSite Strict cookie scoped to `/`, with a Secure flag on HTTPS deployments. Secure production cookies use the `__Host-` prefix and do not set a Domain attribute.
+Sign-in creates a random opaque token. Only its SHA-256 digest is stored in PostgreSQL. The browser cookie is HttpOnly and SameSite Strict with a Secure flag on HTTPS. Production uses the `__Host-` prefix without a Domain attribute.
 
-Sessions expire after the configured absolute duration. Logout deletes the stored token digest and clears the cookie. Workspace access is rechecked against current membership on every request, so removing a member invalidates their access without waiting for session expiry.
+Sessions expire after the configured absolute lifetime. Logout revokes the stored token and clears the cookie. Workspace membership is checked on each request. Removing a member revokes their sessions using that workspace.
 
-Every session-authenticated mutation requires both a trusted `Origin` and the `X-Vouch-CSRF` header returned by the session endpoint. The CSRF value is derived from the opaque session token and is never used as a bearer credential. A legitimate command-line client must send its configured origin, session cookie and CSRF header. Login validates origin before accepting credentials. Failed sign-in attempts are rate-limited in memory by source address and normalized email, with a bounded map.
+Every session-authenticated mutation needs the trusted `Origin` and session-derived `X-Vouch-CSRF` header. Login validates the origin before accepting credentials. Machine evidence callbacks use their separate per-run HMAC authentication rather than browser cookies or CSRF tokens.
 
-When running several API replicas, use an upstream shared rate limiter in addition to the per-process application limit. Configure trusted proxy handling explicitly rather than trusting arbitrary forwarded address headers.
+Failed login attempts are rate-limited by the application. Multiple API replicas also need an upstream shared rate limiter. Configure trusted proxies explicitly instead of accepting arbitrary forwarded address headers.
 
 ## Workspace membership
 
-A signed-in user can create another workspace and switch between their memberships. The current workspace is stored with the session rather than trusted from an arbitrary request header.
+A signed-in user can create a workspace and switch between existing memberships. The selected workspace belongs to the server session. A client-supplied tenant header cannot replace it.
 
-Workspace owners can list and provision members, including another owner. Adding an existing user grants membership without changing that user's password. A new user requires a password of at least fourteen characters. Deliver initial credentials through an approved private channel, then have the user rotate their password.
+Owners may list, provision and remove members. Adding an existing user does not overwrite their password. Deliver a new user's initial password privately and require rotation. Final-owner removal is rejected. Ordinary members cannot perform owner-only membership, connector-credential or privacy actions.
 
-Removing a membership revokes sessions currently using that workspace. The final workspace owner cannot be removed. Ordinary members can use permitted product workflows but cannot administer memberships or perform owner-protected operational actions.
+## Database permissions
 
-## Database enforcement
+The [versioned SQL migrations](../../apps/api/src/database/migrations/) establish schema, restricted runtime permissions and forced row-level security. The migration connection can be supplied separately using `DATABASE_MIGRATION_URL`. Runtime queries use `DATABASE_URL`. If the runtime login differs from the migrator, set `DATABASE_RUNTIME_ROLE` to the actual PostgreSQL username so migrations can grant the restricted role correctly. Supabase session-pooler project suffixes are not part of that underlying PostgreSQL role name.
 
-Tenant data is scoped at the database boundary rather than only filtered in route handlers.
+Use a Supabase direct connection or session pooler on port 5432 rather than transaction pooling on port 6543. Remote connections verify server certificates. `DATABASE_SSL_CA_FILE` can provide a trusted PEM CA file when needed. Disabling verification or using a permissive TLS mode is rejected.
 
-- `AsyncLocalStorage` carries the authorized workspace through asynchronous request handling.
-- Every ordinary database query runs in a short transaction, sets the workspace with transaction-local settings and assumes the restricted `vouch_runtime` role.
-- The runtime role cannot log in, create databases or roles, become a superuser or bypass row-level security.
-- Targets, campaigns, runs and live execution records have direct workspace policies. Event, account, review, evidence and artifact records inherit ownership through their run.
-- Forced PostgreSQL row-level security applies to reads and writes. Composite target/campaign/run foreign keys prevent cross-workspace parent references.
-- Authentication tables are unavailable to the ordinary runtime role. The authentication module accesses them under an explicit system context after performing identity and membership checks.
+The migrator must own the Vouch tables and have the required schema permissions. Creating the restricted role requires `CREATEROLE` when the role does not already exist. The migrator must be able to grant `vouch_runtime` membership to the actual runtime PostgreSQL role. This does not inherently require a PostgreSQL superuser. Supabase database administration privileges must be checked for the selected project.
 
-A query without a workspace context cannot read tenant records. Worker and maintenance operations must explicitly use `withSystemDatabase`. Worker transactions obtained from a raw pool connection must call `configureDatabaseClient` after `BEGIN`. Transaction-local settings disappear on commit or rollback and cannot bleed into a later pool request.
+Normal tenant queries assume the restricted runtime role inside a short transaction and set a transaction-local workspace. Forced row-level security protects targets, campaigns, runs and related evidence. Composite foreign keys prevent cross-workspace parent references. A missing workspace context cannot expose tenant rows.
 
-Migrations require a database principal that can create or manage the restricted role and grant it to the application principal. Production should keep database credentials server-only. Restrict database network access to application and maintenance services. The system database context is trusted server code and is not a permission exposed to end users.
+Authentication, worker and maintenance operations use explicit trusted system context. This is internal server authority rather than a permission available to product users. A PostgreSQL service credential must remain server-only and does not belong in browser code.
 
 ## HTTP contract
 
-| Method | Path                         | Behavior                                                                               |
-| ------ | ---------------------------- | -------------------------------------------------------------------------------------- |
-| GET    | `/api/auth/session`          | Return mode, authentication state, user, current workspace, memberships and CSRF value |
-| POST   | `/api/auth/login`            | Accept email and password, set session cookie and return session state                 |
-| POST   | `/api/auth/logout`           | Revoke session and clear cookie                                                        |
-| POST   | `/api/auth/workspace`        | Select an existing membership using `workspaceId`                                      |
-| POST   | `/api/auth/workspaces`       | Create a workspace using `name` and switch to it                                       |
-| GET    | `/api/auth/members`          | Owner-only workspace member list                                                       |
-| POST   | `/api/auth/members`          | Owner-only member provisioning with email, optional name/password and role             |
-| DELETE | `/api/auth/members/{userId}` | Owner-only member removal with final-owner protection                                  |
-| POST   | `/api/auth/password`         | Accept currentPassword and newPassword, rotate password and revoke sessions            |
+| Method      | Route                        | Behavior                                                           |
+| ----------- | ---------------------------- | ------------------------------------------------------------------ |
+| GET         | `/api/auth/session`          | Read authentication state, memberships, current workspace and CSRF |
+| POST        | `/api/auth/login`            | Sign in with email and password                                    |
+| POST        | `/api/auth/logout`           | Revoke session and clear cookie                                    |
+| POST        | `/api/auth/workspace`        | Switch to an existing membership                                   |
+| POST        | `/api/auth/workspaces`       | Create and select a workspace                                      |
+| GET or POST | `/api/auth/members`          | Owner-only listing or provisioning                                 |
+| DELETE      | `/api/auth/members/{userId}` | Owner-only removal with final-owner protection                     |
+| POST        | `/api/auth/password`         | Rotate password and revoke all user sessions                       |
 
-Before sign-in, the session endpoint returns HTTP 200 with `authenticated=false`. Product data routes return HTTP 401 until sign-in. Unknown or other-workspace run reads return HTTP 404 because inaccessible rows are absent from the authorized database view.
+Before sign-in, the session endpoint returns HTTP 200 with `authenticated=false`. Product data reads require authentication. Unknown or other-workspace identifiers return HTTP 404. An authentication or database placeholder is not a completed sign-in test.
 
-## Delivery boundary
+## Remaining integration boundaries
 
-The implementation includes local credentials, server sessions and workspace isolation. Enterprise SSO, password reset email delivery, email invitations and identity-provider federation are separate integrations. Provisioning and password rotation work without an email service. End-user and live-call testing remains with the project owner as requested.
-
-Remove the bootstrap password from the runtime environment after the first owner exists. Existing installations do not need it for normal startup. Rotate the initial password through the account controls and retain recovery access through your approved operator process.
+Enterprise SSO, password-reset email, email invitations and identity-provider federation are separate integrations. Actual remote database access, deployed cookies, owner bootstrap and cross-workspace behavior require checks against the configured environment. Record those results without equating a local build to production acceptance.

@@ -4,49 +4,29 @@
 
 <h1 align="center">Vouch</h1>
 
-<p align="center">Authorized voice-agent testing. Reviewable evidence. Reproducible regressions.</p>
+<p align="center">Authorized voice-agent testing. Real evidence. Reproducible regressions.</p>
 
 <p align="center">
   <a href="#quickstart">Quickstart</a> ·
+  <a href="docs/operations/supabase.md">Supabase</a> ·
   <a href="docs/architecture/application-flow.md">Architecture</a> ·
-  <a href="docs/project-status.md">Project status</a> ·
-  <a href="#contributing">Contributing</a> ·
+  <a href="docs/project-status.md">Status</a> ·
   <a href="LICENSE">MIT license</a>
 </p>
 
 <p align="center">
-  <img src="docs/assets/dashboard.png" alt="Vouch dashboard showing synthetic campaigns, evidence counts and the finding review queue" width="1200" />
+  <img src="docs/assets/dashboard.png" alt="Vouch workspace in its unconfigured state with no fabricated records" width="1200" />
 </p>
 
-<p align="center"><sub>The fixture dashboard baseline with synthetic test data. No live calls are shown.</sub></p>
+Vouch helps developers discover whether an authorized voice agent can be persuaded to skip a business-policy check. It connects actual provider conversation and recording artifacts to trusted backend tool activity, then supports review, bounded reruns and versioned regression exports.
 
-Vouch helps developers test whether a voice agent can be persuaded to skip a business-policy check. It connects the attempted conversation to tool activity and backend evidence, then turns reviewed findings into regression cases.
+The product shows stored workspace records and captured observations only. It does not seed targets, generate conversations, invent metrics or simulate backend outcomes. Missing evidence remains unavailable or unknown. Without database credentials, the workspace shows a setup state.
 
-The implementation includes the local fixture workflow and a gated live PSTN workflow using a Twilio-backed Bolna caller. Campaigns use durable jobs, deterministic evaluation, signed backend evidence, encrypted recordings, human review and regression exports. Session authentication and PostgreSQL workspace isolation are available for deployment. **Live calls remain off by default and have not been acceptance-tested.**
-
-## What you can do today
-
-- Run a verified benign control and a false-authority scenario against the same fictional support backend.
-- Capture synthetic conversation events alongside real PostgreSQL account writes and independent state readbacks.
-- Inspect what was said, which tool was requested, whether it executed and whether state changed.
-- Confirm or dismiss findings without overwriting the evaluator's recorded verdict.
-- Rerun a case under its original configuration and export a versioned regression artifact.
-- Use the responsive workspace and seven searchable documentation guides with copyable commands.
-- Configure live callers with duration controls, conservative budget reservations, cancellation and ambiguous-submission recovery.
-- Manage workspace access, play actual archived recordings and redact transcripts or delete audio as an owner.
-
-The implemented policy requires trusted backend identity verification before `change_contact_phone`. Caller claims never count as verification. Unknown evidence stays unknown. Fixture speech replay uses browser speech synthesis when available and is labelled separately from recordings.
+Live calling is implemented for a supported Twilio-backed Bolna caller and stays disabled until configured. Provider and Supabase acceptance still require the actual operator credentials. Passing isolated tests does not prove a hosted account works.
 
 ## Quickstart
 
-### Prerequisites
-
-- Node.js 24.19 or later
-- pnpm 11.25.0, as pinned in `package.json`
-- Docker with a running daemon for PostgreSQL 17
-- Bash for the setup commands, including WSL2 on Windows
-
-### Install and run
+Use Node.js 24.19 or later and pnpm 11.25.0. Bash is required for the shell setup scripts, including WSL2 on Windows. Supabase is the default PostgreSQL backend. Docker is optional for deployment and required for the isolated database regression suite, not for connecting to hosted Supabase.
 
 ```sh
 git clone https://github.com/MokiMeow/Vouch.git
@@ -54,172 +34,124 @@ cd Vouch
 pnpm install --frozen-lockfile
 test -e .env || (umask 077; cp .env.example .env)
 chmod 600 .env
-pnpm setup:secrets
-bash scripts/db-start.sh
-pnpm db:migrate
+pnpm build
 pnpm dev
 ```
 
-Keep an existing `.env` when repeating setup. Fixtures require no provider credentials. `setup:secrets` generates only missing signing and encryption keys without printing values or replacing existing keys.
+The landing page is `/`, the workspace is `/app` and the seven public guides start at `/docs`. Local development uses Vite port 5173 and API port 4000 on loopback. The app can render its honest setup state before credentials are supplied.
 
-Open `http://127.0.0.1:5173` for the landing page, `/app` for the workspace and `/docs` for documentation. The development command starts Vite, the API and the worker together. PostgreSQL uses loopback port 54329 and the API uses port 4000 by default. The API health endpoint is `/api/health`.
+`scripts/cloud-install.sh` resolves its checkout from its own file path and can be invoked from any working directory. It preserves an existing private environment, installs dependencies and builds. It applies migrations only when a database connection is configured. It does not start Docker, populate provider keys or seed demo records.
 
-For this managed cloud checkout, use `bash scripts/cloud-install.sh` to install, start the database, migrate and build with writable cache paths. It preserves existing configuration. Then start `pnpm dev`. See the [cloud startup guide](docs/operations/cloud-start.md) for separate process startup and readiness checks.
+## Configure Supabase
 
-### Configuration
+The committed [local](.env.example) and [production](.env.production.example) environment examples contain placeholders only. The private `.env` is ignored by Git. Fill it through your secret-management process when credentials are available.
 
-| Variable                     | Purpose                                                                | Needed for fixtures |
-| ---------------------------- | ---------------------------------------------------------------------- | ------------------- |
-| `DATABASE_URL`               | PostgreSQL connection, provided by the local sample                    | Yes                 |
-| `HOST` and `PORT`            | API listener, local defaults or authenticated deployment               | Local defaults      |
-| `BOLNA_API_KEY`              | Server-only credential for the configured provider                     | No                  |
-| `BOLNA_AGENT_ID`             | Configured caller agent identifier                                     | No                  |
-| `AUTHORIZED_PHONE_NUMBERS`   | Exact operator-approved E.164 target allowlist                         | No                  |
-| `VOUCH_EVIDENCE_SIGNING_KEY` | Server master key for separate per-run backend and provider signatures | No                  |
+| Setting                                            | Purpose                                                                                      |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                     | Supabase direct connection or session pooler on port 5432 for the API and worker             |
+| `DATABASE_MIGRATION_URL`                           | Optional separate owner/migrator connection for applying SQL                                 |
+| `DATABASE_RUNTIME_ROLE`                            | Optional distinct private database login provisioned for the server                          |
+| `DATABASE_SSL_CA_FILE`                             | Optional trusted database CA certificate file                                                |
+| `BOLNA_API_KEY`, `BOLNA_AGENT_ID`                  | Server-only supported caller configuration                                                   |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`          | Credentials for the caller's carrier account                                                 |
+| `AUTHORIZED_PHONE_NUMBERS`                         | Exact operator-approved E.164 recipient allowlist                                            |
+| `VOUCH_SYNTHETIC_CHALLENGE`                        | Fictional challenge for the authorized isolated test account, not a real customer credential |
+| `VOUCH_EVIDENCE_SIGNING_KEY`, `VOUCH_ARTIFACT_KEY` | Separate backend-signature and recording-encryption keys                                     |
 
-Use [`.env.example`](.env.example) as the reference. `.env` is ignored by Git. Never put secrets in browser variables, source files, screenshots or commits. Live activation additionally requires Twilio controls, approved targets, a matching fictional `VOUCH_SYNTHETIC_CHALLENGE`, recording hosts and confirmed billing settings. Use the [live setup guide](docs/guides/bolna.md) and [full configuration example](.env.example). Production uses [`.env.production.example`](.env.production.example) and the [deployment guide](docs/operations/deployment.md).
+Remote PostgreSQL connections require verified TLS. Transaction poolers on port 6543 are rejected because the worker requires session advisory locks. Use the Supabase direct endpoint or session pooler. Keep database credentials out of browser code; this app uses server-side PostgreSQL rather than exposing an anonymous Supabase data client.
 
-### Run your first campaign
+Read [the Supabase runbook](docs/operations/supabase.md) before applying migrations. The migration role needs schema ownership or equivalent creation/grant privileges and permission to create or administer the restricted runtime role. A PostgreSQL superuser satisfies these requirements for local tests. Supabase's managed owner is not assumed to be a superuser; migration preflight reports missing privileges.
 
-1. Open the workspace and choose **New campaign**.
-2. Select a synthetic support target or create one locally.
-3. Set the test window, call count, duration and budget. The initial control and adversarial pair reserve two call slots. Fixture cost is zero and concurrency is one.
-4. Authorize the campaign. The worker runs the verified control first, followed by the false-authority case.
-5. Open a finding to inspect the transcript, event timeline, policy and backend state diff.
-6. Confirm or dismiss it with a rationale. Use **Rerun case** while scope remains, or **Export regression** to download the JSON evidence.
+```sh
+# After configuring the actual database connection
+pnpm db:migrate
+# Before enabling signed evidence or recording storage
+pnpm setup:secrets
+```
 
-Future windows stay queued. Expired, stopped or exhausted campaigns cannot execute a new run. Fixture conversations finish immediately rather than simulating real call duration.
+Migration SQL is tracked under [`apps/api/src/database/migrations/`](apps/api/src/database/migrations/). The runner verifies checksums, serializes migrations and records successful versions. The production build includes the same SQL files. Never edit an applied migration; add a new numbered file. Existing database records are preserved, and historical simulated records are excluded from product views and execution.
+
+## First real campaign
+
+1. Configure the supported caller, matching carrier account, exact recipient allowlist and storage settings using the [live setup guide](docs/guides/bolna.md).
+2. Register a PSTN target you own or are explicitly authorized to test. Registration alone places no call.
+3. Set a 1–1440 minute window, 2–20 call slots, 40–300 seconds per call and a budget that can conservatively reserve the initial control/adversarial pair.
+4. Instrument the approved target backend using the [signed connector](docs/guides/evidence-connector.md) and [TypeScript SDK](docs/guides/connector-sdk.md).
+5. Launch only after completing the provider prerequisites. Inspect actual transcript, audio and backend facts. A spoken claim is not proof of verification or a state change.
+6. Review candidate violations, rerun while scope remains and export after real evidence exists. Passed controls do not require a finding decision.
+
+The current policy tests `change_contact_phone` on the isolated account `SYN-1042`, using a trusted `synthetic_challenge` verification event. These controlled caller inputs are part of an authorized real test call; they are not generated runtime evidence. Do not supply real customer identity credentials.
 
 ## How it works
 
 ```mermaid
 flowchart TD
-    UI[React workspace] --> Auth[Session and workspace access]
-    Auth -->|Authorize target and bounded scope| API[Express API]
-    API -->|Configuration snapshot and queued runs| DB[(PostgreSQL)]
-    DB -->|One active case across workers| Worker[Background worker]
-    Worker --> Fixture[Synthetic caller and support target]
-    Fixture -->|Tool writes and state readbacks| DB
-    Fixture --> Evidence[Normalized conversation and backend events]
-    Evidence --> Evaluate[Deterministic policy evaluator]
-    Evaluate -->|Verdict and evidence tier| DB
-    DB --> API
-    API --> Review[Evidence review in the workspace]
+    UI[Browser workspace] --> Access[Session and workspace access]
+    Access --> API[API validates target and immutable scope]
+    API --> DB[(Supabase PostgreSQL)]
+    DB --> Worker[Durable worker and budget reservation]
+    Worker --> Caller[Isolated Bolna caller and Twilio control]
+    Caller --> Target[Approved PSTN target]
+    Target --> Connector[Signed customer backend events]
+    Connector --> Evaluate[Deterministic evidence evaluation]
+    Caller --> Media[Actual transcript and encrypted recording]
+    Evaluate --> DB
+    Media --> DB
+    DB --> Review[Evidence review and bounded rerun]
     Review --> Export[Versioned regression JSON]
-    Review -->|Same configuration and scope checks| API
-    Worker --> Live[Bolna caller and Twilio controls]
-    Live --> Target[Approved PSTN voice target]
-    Target --> Connector[Signed customer backend connector]
-    Connector --> Evidence
-    Live --> Archive[Encrypted actual recordings]
-    Archive --> Review
 ```
 
-The API validates input and captures immutable scope and configuration. The worker takes jobs from PostgreSQL with a global concurrency lock. The fixture emits explicitly synthetic conversation events while its instrumented tool changes a fictional account in the real database. Pure policy functions grade the recorded evidence. Review decisions are appended separately from verdicts.
+The caller runtime, target transport, customer evidence connector and evaluator remain separate. The server enforces scope independently of prompts. Unknown call submission outcomes hold their reservation rather than trigger a duplicate call. Budget admission relies on a confirmed all-component rate ceiling and does not impose an external provider-account spending cap. See the [provider contract](docs/architecture/provider-contract.md) for supported controls and the queued-call expiry limitation.
 
-New configuration hashes use `sha256-sorted-json-v1` so they survive JSONB key ordering. Reruns preserve the captured configuration, consume another call slot and recheck scope. External backend evidence uses separate per-run HMAC credentials, ordered batches and an explicit complete-log marker. The [TypeScript connector SDK](packages/connector/src/index.ts) and [SQL outbox integration guide](docs/guides/connector-sdk.md) provide the customer-side contract. Provider speech cannot supply trusted backend facts.
+Findings search covers the entire workspace, including visible titles, actual outcomes, campaign and target names. Page, search and outcome state live in the URL. Regression exports require recorded evidence, and rerun controls show remaining scope while the server remains authoritative.
 
-Read the [component map and full workflow](docs/architecture/application-flow.md) for implementation boundaries.
+## Stack and source map
 
-## Tech stack
-
-| Layer              | Implementation                                                                                   |
-| ------------------ | ------------------------------------------------------------------------------------------------ |
-| Interface          | React 19, TypeScript 5.9, Vite 8, CSS                                                            |
-| Visual system      | Self-hosted Geist and Geist Mono, Phosphor icons, original Vouch mascots                         |
-| API                | Node.js 24, Express 5, Zod 4                                                                     |
-| Persistence        | PostgreSQL 17 with `pg`, SQL migrations and JSONB snapshots                                      |
-| Background jobs    | Separate TypeScript worker, PostgreSQL queue and advisory locks                                  |
-| Policy engine      | Pure TypeScript schemas, scope limits and deterministic assertions                               |
-| Provider boundary  | Bolna caller provisioning/dispatch and Twilio call control using `undici`                        |
-| Access and storage | Scrypt passwords, opaque sessions, CSRF checks, forced PostgreSQL RLS and AES-256-GCM recordings |
-| Deployment         | Nonroot Docker services, health checks, maintenance and guarded backup/restore                   |
-| Verification       | Vitest, Playwright, axe-core and TypeScript checks                                               |
-| Tooling            | pnpm, Prettier and Docker for local PostgreSQL                                                   |
-
-Exact dependency versions are pinned in [`package.json`](package.json) and [`pnpm-lock.yaml`](pnpm-lock.yaml).
-
-## Repository map
+| Layer                | Implementation                                                                               |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| Interface            | React 19, TypeScript 5.9, Vite 8, Geist and Phosphor icons                                   |
+| Visual system        | Cool white, electric blue, fine dividers and an original photographic ice-current background |
+| API                  | Node.js 24, Express 5 and Zod 4                                                              |
+| Persistence          | Supabase PostgreSQL, `pg`, versioned SQL and JSONB configuration/evidence                    |
+| Jobs and provider    | Separate TypeScript worker, advisory locks, Bolna and Twilio adapters                        |
+| Access and artifacts | Scrypt sessions, CSRF, workspace RLS and AES-256-GCM recording storage                       |
+| Verification         | Vitest, Playwright, axe-core and isolated PostgreSQL/API regressions                         |
 
 ```text
-apps/api/src/
-  server.ts, worker.ts, migrate.ts   Stable executable entry points
-  auth/, database/, campaigns/      Access, persistence and configuration
-  execution/, providers/bolna/      Job orchestration and provider adapters
-  evidence/, http/, operations/     Ingestion, transport and maintenance
-apps/web/src/
-  pages/                            Landing and public documentation
-  features/                         Auth, workspace, campaigns, evidence and findings
-  shared/                           Types, request helpers, hooks and UI primitives
-  styles/                           Base styles, tokens and feature styles
-packages/core/                      Domain policy, evaluation and unit checks
-packages/connector/                 Signed customer-backend evidence SDK
-scripts/                            Stable setup, build and operation commands
-  verification/                     Browser runners and coverage reporting
-docs/                               Guides, architecture, operations, reports and history
-AGENTS.md                           Coding-agent instructions and placement rules
+apps/api/src/        Stable entry points plus domain-specific implementation
+  database/migrations/ Versioned Supabase-compatible SQL
+apps/web/src/        pages, features, shared infrastructure and styles
+packages/core/       Policy, schemas, scope and deterministic evaluation
+packages/connector/ Customer backend event signing and delivery
+scripts/verification/ Isolated API and browser regressions
+docs/                Guides, architecture, operations, reports and history
+AGENTS.md            Coding-agent boundaries and placement rules
 ```
 
-See the [documentation index](docs/README.md) for the guide map and contribution placement rules.
-
-## Verification
+## Checks
 
 ```sh
 pnpm build
 pnpm test
+# Requires a healthy Docker daemon and a cached PostgreSQL 17 image
+docker pull postgres:17-alpine
 pnpm test:integration
-# Requires a built web app, running API and worker, and Chromium
+# Uses actual built UI with intercepted records only inside the test process
 pnpm test:browser
-pnpm test:browser:requests
-pnpm test:browser:design
-pnpm audit
 ```
 
-Integration checks create and reset only a dedicated database ending in `_test`, using `vouch_test` by default or `TEST_DATABASE_URL`. Browser checks add synthetic records to the running development database and write ignored screenshots to `artifacts/`. `CHROMIUM_PATH` defaults to `/usr/bin/chromium`.
+The API regression uses its own randomly named temporary PostgreSQL container and `_test` database. It never resets retained development or customer data, starts no worker and strips provider credentials. The browser regression uses test-only intercepted responses, never bundled demo data or database seeds. These fixtures are test inputs, not records displayed by the published application.
 
-The earlier fixture baseline passed 60 unit tests, 168 PostgreSQL/HTTP assertions and three browser suites. Those results predate the live/authentication expansion and are not validation of the new implementation. For this expansion, testing and real voice calls were explicitly left to the user. Compilation and static integration review are documented separately in the [handoff](docs/project-status.md).
+Supabase connectivity, actual phone calls, carrier behavior, billing and hosted recovery cannot be certified before credentials are available. The [current status](docs/project-status.md) records the checks actually completed and their limits.
 
-Existing test harnesses reflect the earlier fixture API and may need session, signed-connector and isolated-database setup adjustments before the expanded release is validated. Never run integration checks against customer or retained development data.
+## Deployment and data
 
-## Live setup and deployment
+Read [deployment](docs/operations/deployment.md) and [workspace authentication](docs/guides/authentication.md). Production requires an exact HTTPS origin and session authentication. Configure actual credentials privately before migrating or deploying. Never publish `.env`, database dumps, recordings, test captures, package caches or source maps.
 
-Start with [Bolna setup](docs/guides/bolna.md), then read the [provider contract](docs/architecture/provider-contract.md), [durable orchestration](docs/architecture/live-orchestration.md) and [signed evidence connector](docs/guides/evidence-connector.md). The first live transport is PSTN with a Twilio-backed Bolna caller. SIP, WebSocket/WebRTC and other runtimes remain optional future extensions.
+Recordings have configurable retention and owner privacy controls. Backup the artifact encryption key separately. Raw repository notes and source files are blocked by the application HTTP allowlist. GitHub visibility is separate from that application boundary.
 
-The [deployment guide](docs/operations/deployment.md) covers Docker Compose, owner bootstrap, HTTPS, health checks, retention, backups and guarded restoration. Production requires session authentication and an exact HTTPS `PUBLIC_ORIGIN`. Local mode is restricted to nonproduction loopback use.
+## Contributing and license
 
-```sh
-# Build web and native Node server outputs
-pnpm build
-# After configuring the deployment environment and applying migrations
-pnpm start:api
-# Run the worker in a separate supervised process
-pnpm start:worker
-```
+Read [AGENTS.md](AGENTS.md), the [documentation index](docs/README.md) and [domain glossary](docs/architecture/domain-glossary.md). Keep examples out of runtime data, preserve evidence provenance and add meaningful regressions for behavioral bugs.
 
-Live dispatch is gated by operator-owned credentials, a configured caller, an approved recipient, supported carrier controls, recording storage and an all-inclusive rate ceiling. Configuration is not proof of provider behavior. The caller, billing and duration/cancellation contract must be verified with the actual account before customer use. A reservation does not impose a spending cap on an external provider account.
-
-## Project status
-
-The remaining core coding areas from the first PSTN release brief are implemented. **Runtime acceptance is pending.** There is no defensible verified 100 percent claim until the user completes account configuration, integration/security checks and live control/adversarial calls.
-
-See the [current implementation checklist and acceptance handoff](docs/project-status.md) for the code delivered, required operator settings and validation still outstanding.
-
-## Data and access
-
-Local PostgreSQL data persists in ignored `.data/postgres/`. Repeating setup retains it. Sample database credentials are for development only.
-
-Production workspace queries run under a restricted PostgreSQL role with forced row-level policies. Backend evidence keys are distinct from provider evidence keys. Recordings are encrypted at rest and served only through authenticated, workspace-scoped endpoints. Owner privacy controls preserve backend proof and provenance; configurable maintenance handles retention. Back up the encryption key separately from data.
-
-The HTTP server exposes approved pages and assets. Raw repository documents, audit notes, dotfiles, backups and source maps remain blocked. GitHub visibility is separate. Public deployment, backup recovery and fresh-task restoration have not been exercised in this change.
-
-## Contributing
-
-Read [`AGENTS.md`](AGENTS.md), the [domain glossary](docs/architecture/domain-glossary.md) and the [original brief](docs/reference/product-brief.md) before changing behavior. Keep provider contracts narrow, preserve evidence provenance and label synthetic data. Reproduce behavioral bugs with a meaningful failing test, then run checks appropriate to the change.
-
-For an issue or pull request, explain the user-visible problem, the change and its validation. Never include real credentials, private account data or recordings without authorization. Keep source and creator notices when adapting third-party work.
-
-## License and credits
-
-Vouch's project code and original assets are available under the [MIT license](LICENSE).
-
-Third-party assets retain their own licenses. [Phosphor icons](apps/web/public/licenses/phosphor-MIT.txt) and [OpenCode token references](apps/web/public/licenses/opencode-MIT.txt) use MIT. [Geist](apps/web/public/licenses/geist-OFL.txt) and [Geist Mono](apps/web/public/licenses/geist-mono-OFL.txt) use the SIL Open Font License. See the [design sources and credits](docs/reports/design-redesign.md) for attribution and the scope of the references.
+Project code and original assets use [MIT](LICENSE). Third-party notices remain intact for [Phosphor](apps/web/public/licenses/phosphor-MIT.txt), [OpenCode references](apps/web/public/licenses/opencode-MIT.txt), [Geist](apps/web/public/licenses/geist-OFL.txt) and [Geist Mono](apps/web/public/licenses/geist-mono-OFL.txt). Tessory previews informed interaction research only; no unverified creator code or paid assets were copied.

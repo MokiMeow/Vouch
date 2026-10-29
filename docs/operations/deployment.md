@@ -1,6 +1,6 @@
 # Production deployment and operation
 
-This guide describes the supplied deployment code. No deployment, container build, recovery exercise or live call was performed as part of this change. The operator must validate these procedures in an isolated environment before routing customer traffic.
+This guide describes the supplied deployment code. Local isolated API/PostgreSQL and browser regressions are recorded in the current status report. No hosted Supabase deployment, container image build, recovery exercise or live call is claimed. The operator must validate these procedures in an isolated environment before routing customer traffic.
 
 ## Runtime layout
 
@@ -19,7 +19,7 @@ flowchart LR
 
 `Dockerfile` builds with Node 24.19.0 and pnpm 11.25.0, compiles the frontend and backend, rewrites emitted relative imports for native Node ESM and removes development dependencies from the runtime. The final image runs as the unprivileged `node` user. `NODE_IMAGE` and `PNPM_VERSION` build arguments allow explicit security updates.
 
-`compose.yaml` keeps PostgreSQL off host ports. It separates migration, API, worker and maintenance processes. API and worker start after successful migration. The API publishes only to host loopback, ready for an operator-managed HTTPS reverse proxy. Application containers use a read-only root filesystem, a limited temporary filesystem, dropped capabilities and persistent encrypted-artifact storage.
+`compose.yaml` uses configured Supabase PostgreSQL by default and separates migration, API, worker and maintenance processes. The optional `local-db` profile provides a private local PostgreSQL container for an explicitly chosen local deployment. It is not required for Supabase. API and worker start after successful migration. The API publishes only to host loopback, ready for an operator-managed HTTPS reverse proxy. Application containers use a read-only root filesystem, a limited temporary filesystem, dropped capabilities and persistent encrypted-artifact storage.
 
 The database image defaults to the explicit `postgres:17.7-alpine` release. Set `POSTGRES_IMAGE` to an operator-reviewed newer patch or immutable image digest when applying security updates. Preserve PostgreSQL major-version compatibility or perform its documented upgrade procedure.
 
@@ -43,23 +43,27 @@ pnpm setup:secrets --file .env.production
 
 Set these values through a private editor or your secret-management workflow.
 
-| Setting                         | Required value                                                                       |
-| ------------------------------- | ------------------------------------------------------------------------------------ |
-| `POSTGRES_USER`                 | Database owner name selected by the operator                                         |
-| `POSTGRES_DB`                   | Database name selected by the operator                                               |
-| `DATABASE_URL`                  | PostgreSQL URL using the selected credentials, service host `database` and port 5432 |
-| `PUBLIC_ORIGIN`                 | The exact externally visible HTTPS origin                                            |
-| `VOUCH_AUTH_MODE`               | `session`                                                                            |
-| `VOUCH_BOOTSTRAP_EMAIL`         | Initial owner email when creating the first user                                     |
-| `VOUCH_BOOTSTRAP_PASSWORD`      | Initial owner password with at least 14 characters                                   |
-| `VOUCH_BOOTSTRAP_WORKSPACE`     | Optional initial workspace name                                                      |
-| `VOUCH_ARTIFACT_KEY`            | A private 32-byte key encoded as base64                                              |
-| `VOUCH_ARTIFACT_RETENTION_DAYS` | Recording retention, default 30 days                                                 |
-| `VOUCH_RECORDING_HOSTS`         | Exact HTTPS hosts approved for provider recording retrieval                          |
-| `VOUCH_SESSION_HOURS`           | Optional session lifetime, default 12 hours                                          |
-| `VOUCH_HTTP_PORT`               | Optional loopback host port, default 4000                                            |
+| Setting                         | Required value                                               |
+| ------------------------------- | ------------------------------------------------------------ |
+| `POSTGRES_USER`                 | Only for optional local-db profile                           |
+| `POSTGRES_DB`                   | Only for optional local-db profile                           |
+| `DATABASE_URL`                  | Supabase direct/session-pooler URL on 5432 with verified TLS |
+| `PUBLIC_ORIGIN`                 | The exact externally visible HTTPS origin                    |
+| `VOUCH_AUTH_MODE`               | `session`                                                    |
+| `VOUCH_BOOTSTRAP_EMAIL`         | Initial owner email when creating the first user             |
+| `VOUCH_BOOTSTRAP_PASSWORD`      | Initial owner password with at least 14 characters           |
+| `VOUCH_BOOTSTRAP_WORKSPACE`     | Optional initial workspace name                              |
+| `VOUCH_ARTIFACT_KEY`            | A private 32-byte key encoded as base64                      |
+| `VOUCH_ARTIFACT_RETENTION_DAYS` | Recording retention, default 30 days                         |
+| `VOUCH_RECORDING_HOSTS`         | Exact HTTPS hosts approved for provider recording retrieval  |
+| `VOUCH_SESSION_HOURS`           | Optional session lifetime, default 12 hours                  |
+| `VOUCH_HTTP_PORT`               | Optional loopback host port, default 4000                    |
 
-Store the selected database password alone in `.data/secrets/postgres_password` with mode 0600. `DATABASE_URL` must contain the same password, encoded for a URL. Set `VOUCH_POSTGRES_PASSWORD_FILE` if the Compose secret is stored elsewhere. Never put credential files in the Docker build context or source control.
+Only when using the optional `local-db` profile, store its selected database password in `.data/secrets/postgres_password` with mode 0600. For that local profile, `DATABASE_URL` must contain the same password, encoded for a URL; hosted Supabase uses its own supplied connection string. Set `VOUCH_POSTGRES_PASSWORD_FILE` if the Compose secret is stored elsewhere. Never put credential files in the Docker build context or source control.
+
+The optional database image does not configure PostgreSQL TLS automatically. The profile supports local storage and restore workflows; an application connecting by the `database` service hostname also needs an operator-configured server certificate and trusted CA. Use configured Supabase for the default application deployment. Do not disable remote certificate verification to connect a plaintext container.
+
+When `DATABASE_SSL_CA_FILE` is required in containers, its value must name a readable path inside each service. Mount the public CA certificate read-only at that path in a local Compose override for migrate, API, worker and maintenance. A host filesystem path in the environment alone does not mount the certificate.
 
 The artifact key is necessary to decrypt recordings after a restart or restoration. Back it up separately through a secure secret-management system. The backup scripts intentionally do not copy it. Changing the key without migrating existing artifacts makes those artifacts unreadable.
 
@@ -69,7 +73,7 @@ Add provider, connector and live-control settings only after reading [the provid
 
 ```sh
 docker compose --env-file .env.production build
-docker compose --env-file .env.production up -d database migrate api worker
+docker compose --env-file .env.production up -d migrate api worker
 docker compose --env-file .env.production ps
 ```
 
@@ -102,9 +106,11 @@ docker compose --env-file .env.production --profile operations run --rm -T maint
 
 Schedule the apply command through your host scheduler or orchestrator. Repeat bounded batches when the log reports `remaining_batches`. Restrict scheduler logs and alert on failures. Set `VOUCH_RUN_RETENTION_DAYS` only after approving the data-retention policy. When configured, maintenance deletes a closed campaign only if all its runs finished before the cutoff and every live execution is terminal with settled cost. It removes the ciphertext first, then transcripts, account state, review history and run/campaign metadata. It preserves targets, active work, uncertain provider submissions and unfinished isolated-caller cleanup. An unresolved execution never expires merely because it is old. Leave the setting unset to retain campaign evidence indefinitely. Expire backup copies separately.
 
-## Consistent backup
+## Consistent local-container backup
 
-Backups include the PostgreSQL custom-format dump, encrypted artifact files and checksums. Database metadata and transcripts remain sensitive even though recording files are encrypted. Keep the whole snapshot in encrypted backup storage with limited access.
+The supplied backup/restore shell scripts target the optional local database container. Hosted Supabase recovery uses the project backup/PITR facilities and approved off-site database backup procedures; do not run local container restore commands against Supabase. Recording artifacts and their encryption key require their own backup in either deployment.
+
+Local snapshots include the PostgreSQL custom-format dump, encrypted artifact files and checksums. Database metadata and transcripts remain sensitive even though recording files are encrypted. Keep the whole snapshot in encrypted backup storage with limited access.
 
 For a consistent snapshot, stop writers and maintenance first. The script refuses to proceed while application, worker, migration or maintenance containers are running. The destination directory must not exist. A temporary directory is published only after all snapshot commands complete.
 
@@ -122,7 +128,7 @@ Use a new snapshot name each time. `VOUCH_COMPOSE_ENV` selects an alternative Co
 Restore only into a new, empty database and empty artifact volume. The script never drops tables, clears data or replaces an existing backup. It validates checksums and rejects archive paths outside generated UUID artifact names, symbolic links and special-file entries.
 
 ```sh
-docker compose --env-file .env.production up -d database
+docker compose --env-file .env.production --profile local-db up -d database
 bash scripts/restore.sh .data/backups/snapshot-001
 docker compose --env-file .env.production run --rm -T migrate
 docker compose --env-file .env.production up -d api worker

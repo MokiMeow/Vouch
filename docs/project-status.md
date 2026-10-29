@@ -1,54 +1,60 @@
-# Vouch implementation and acceptance handoff
+# Vouch current status
 
-Updated on October 28, 2026 against the [original brief](reference/product-brief.md).
+Updated on October 29, 2026.
 
-## Implementation status
+The website now uses the selected cool-white and electric-blue direction with original ice-current background imagery. Retired mascot assets and simulated product flows have been removed. Supabase PostgreSQL is the default backend, with placeholder-only configuration until actual credentials are supplied.
 
-The core coding areas for the first PSTN release are implemented, including the previously missing live runtime, resource-control state machine, customer evidence connector, authenticated workspace access and deployment operations. The previous approximate 65 percent assessment described the earlier fixture-only implementation and is superseded by this checklist.
+Overall completion is approximately 90 percent as a qualitative project estimate. The requested implementation and isolated checks are complete; hosted configuration, provider acceptance and operational recovery still need actual credentials. This estimate is not a test-coverage measure or production-readiness certification.
 
-**Acceptance testing is pending by explicit user request.** Code implementation is not proof of a working provider account or a production-ready deployment. No new successful provider authentication, live call, container deployment, backup restoration or fresh-task recovery is claimed.
+## Real data boundary
 
-| Brief capability         | Implemented code                                                                                                                        | Acceptance still required                                                           |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Authorized target        | Fixture and operator-allowlisted PSTN registration with authorization reference                                                         | Verify the recipient is owned or explicitly authorized                              |
-| Bounded campaign         | Immutable scope, call slots, global concurrency, durable deadlines, conservative reservations, cancellation and stop handling           | Verify actual provider/carrier limits and the account's all-component price ceiling |
-| Explicit policy          | Versioned phone-change policy with trusted identity-verification precondition                                                           | Instrument the same fictional account and tool in the approved target backend       |
-| Autonomous spoken caller | Isolated Bolna caller per scenario, actual prompt/model capture, dispatch and Twilio control                                            | Verify the configured supported caller and realized conversation                    |
-| Realized evidence        | Provider transcript normalization, actual recording capture, signed backend batches, complete-log marker and encrypted artifact storage | Confirm actual provider fields/audio and trustworthy customer event correlation     |
-| Deterministic evaluation | Trusted event/account/order checks, evidence tiers and explicit unknown outcomes                                                        | Validate control and adversarial outcomes using real artifacts                      |
-| Human review             | Evidence timeline, transcript, audio, terminal findings, review history and privacy controls                                            | Reviewer and accessibility acceptance of the expanded interface                     |
-| Rerun and export         | Captured configuration integrity, bounded rerun and versioned JSON export                                                               | Validate reproduction using the actual caller and customer target                   |
-| Workspace access         | Scrypt passwords, opaque sessions, CSRF, owner/member management, restricted-role PostgreSQL RLS and cross-workspace references         | Authentication, authorization, concurrency and isolation review                     |
-| Operation                | Native Node builds, nonroot Compose services, health/heartbeat checks, maintenance, retention and guarded backup/restore                | Build images, deploy behind HTTPS and exercise recovery                             |
+- Product reads and workers exclude historical simulated records.
+- There is no production demo seed, local fixture caller, invented transcript, browser speech substitute or fabricated dashboard count.
+- Missing database configuration produces a setup state. Missing call evidence stays unavailable or unknown.
+- The v1 caller still uses the explicitly authorized isolated test account and challenge. These are controlled inputs to a real call, not generated observations.
+- Tests use isolated records inside temporary databases or browser interception only. They do not populate the website or contact providers.
 
-Additional runtime providers and SIP/WebSocket/WebRTC transports are optional expansion work. The first implemented live path is PSTN through a Twilio-backed Bolna caller. Custom policy authoring, SSO and email-based recovery are not claimed as part of this first release.
+## Desktop report fixes
 
-## Configuration the operator supplies
+Global findings search now matches visible titles and actual outcomes across the workspace. Blank search is empty, literal wildcard characters stay literal, and pagination counts conversations. Page, search and filters persist in the URL, including reload and Back. Modals close on navigation, and action errors cannot leak into another page.
 
-Use [Bolna setup](guides/bolna.md), [the provider contract](architecture/provider-contract.md), [live orchestration](architecture/live-orchestration.md) and [deployment](operations/deployment.md).
+Campaign rows provide one native primary link and a separate labelled Stop action. Passed controls do not display Pending decisions. Rerun controls reflect stop state, remaining slots, run status and the authorized window, with server enforcement preserved. Exports require recorded call evidence. Field messages name the invalid field, and API/form windows agree on 1–1440 minutes.
 
-- A supported Bolna caller template and credentials for its Twilio account
-- The exact authorized E.164 target allowlist and authorization reference
-- `VOUCH_SYNTHETIC_CHALLENGE` matching the fictional sandbox account so the benign caller can actually complete verification
-- Correct cost units/currency, finalization semantics and a conservative all-inclusive rate ceiling
-- Exact approved recording hostnames and server-side signing/encryption keys
-- For production, database credentials, an HTTPS origin and initial workspace owner credentials
-- Customer-side instrumentation using the [connector SDK](guides/connector-sdk.md), keeping backend signing keys away from the target LLM
+The new visual system also fixes Docs focus treatment, removes crowded mascot art and keeps the background out of dense evidence content. See [the report follow-up](reports/desktop-followup.md).
 
-The ignored local environment retains the existing provider credential. Missing signing and artifact-encryption keys were generated privately without printing values or replacing existing keys. Live dispatch remains disabled unless an operator explicitly configures and enables it.
+## Supabase and setup
 
-## Implemented failure behavior
+Versioned SQL lives in `apps/api/src/database/migrations/` and is copied into the native server build. The runner checks ownership/role privileges, serializes migration and verifies applied checksums. It supports separate runtime/migration credentials and verified TLS. Direct or session pooling is required because workers use session advisory locks.
 
-An uncertain submission is not retried automatically. Its reservation and global live slot remain held until a correlated provider execution is recovered. Only a provably unsent preflight failure can release an unused reservation. A known live call is cancelled through verified carrier identity when stop, deadline or authorization changes require it.
+The private environment and committed examples contain no usable credentials. Hosted database credentials, caller/carrier configuration, recipient authorization, recording hosts and billing confirmations remain to be provided. Signing/encryption keys can be generated privately when preparing actual evidence capture.
 
-Missing finalized cost remains unresolved. A confirmed duration or billing overrun stops the campaign and records an operational warning. A reservation is an admission bound based on the operator's pricing contract, not a provider-account spending cap.
+The cloud install script was executed successfully from `/tmp`, with writable package-manager storage inside the checkout. It completed install/build without touching a database and explicitly skipped migrations while placeholders were empty. Compose uses configured Supabase by default; optional local PostgreSQL is behind the `local-db` profile.
 
-Final backend evidence is accepted only within the configured delivery window. Missing evidence stays unknown. Actual recording capture can be retried by an owner without inventing audio. Privacy redaction retains provenance digests and backend facts. Isolated caller cleanup must not erase remote execution history before required artifacts are captured or explicitly discarded under policy.
+## Verification completed
 
-## What was and was not checked
+| Check                       | Result                   | Scope                                                                                                              |
+| --------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Unit checks                 | 79 passed                | Evidence, scope, configuration, URL state, field messages and Supabase connection validation                       |
+| PostgreSQL/API regressions  | 113 passed               | Fresh/repeated/checksummed SQL, RLS, global search, pagination, validation, export/rerun guards, sessions and CSRF |
+| Browser regressions         | Passed                   | 71 browser-only records, navigation/history/modals, search, controls, stale errors and 320–2560px layouts          |
+| Public Docs                 | Passed                   | All seven routes, search states, clipboard, focus ring and separate-tab navigation                                 |
+| Accessibility               | 16 scans passed          | Desktop/mobile product test states and actual placeholder-only landing/workspace/quickstart pages                  |
+| Production build            | Passed                   | Strict TypeScript, Vite and native Node output including SQL files                                                 |
+| Production dependency audit | No known vulnerabilities | Installed production dependencies                                                                                  |
+| Compose configuration       | Passed                   | Placeholder configuration and Supabase-default service graph                                                       |
 
-The combined web/native server production build completed successfully, including strict TypeScript compilation. The required database migration also completed successfully. Formatting, shell/JavaScript syntax and static integration review were performed. No unit, integration, browser, load, security-acceptance or voice-call test suite was run for this expansion. The prior 60 unit tests, 168 PostgreSQL/HTTP assertions and three browser suites describe the earlier fixture baseline only.
+The database regression created its own temporary PostgreSQL 17 container and guarded `_test` database, ran no worker, removed provider credentials and cleaned up its test resources. Retained development data was not reset. The current README screenshot was captured from the actual unconfigured application with no intercepted records.
 
-Existing test harnesses target the earlier fixture API. Their authorization, signed evidence and isolated database setup must be reviewed alongside the new acceptance cases by the team performing testing. Those older results must not be reused as release approval for this implementation.
+The requested clean-code tools also ran against current source. Static complexity review prompted smaller database/message helpers, duplication analysis found no candidates at 0.8, and narrow URL/title mutation testing killed 25 meaningful mutants with five inspected equivalent survivors. These results do not establish an application-wide complexity or mutation score.
 
-The [action log](history/action-log.md) records the implementation and actual build/migration outcomes. The [application flow](architecture/application-flow.md) maps components. Release approval depends on the operator's testing and deployment checks.
+## Credential-dependent acceptance
+
+These checks are still pending actual credentials and account access.
+
+1. Connect the hosted Supabase project and verify its actual migrator/runtime privileges and TLS settings.
+2. Apply the tracked migrations to that approved database after credentials and authorization are supplied.
+3. Configure the supported Bolna caller, matching Twilio account, explicitly authorized target, signed backend and recording host allowlist.
+4. Validate actual control/adversarial conversations, duration/cancellation, final billing, recordings, review, rerun and export.
+5. Exercise deployment, backup/recovery and retention in the hosted environment.
+
+The hosted Bolna API's queued-submission expiry limitation remains documented in the [provider contract](architecture/provider-contract.md). Local tests do not establish remote account capabilities, a hard external spending cap or a public deployment. No Supabase migration or real phone call was performed in this change.

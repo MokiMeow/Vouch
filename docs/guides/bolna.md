@@ -1,58 +1,68 @@
 # Bolna live setup
 
-The live PSTN path is implemented behind explicit configuration gates. It uses an isolated Bolna caller for each scenario and Twilio for verified carrier controls. No live call or provider acceptance test was performed for this expansion.
+Vouch uses an isolated Twilio-backed Bolna caller for each authorized scenario. Normal campaign launch places actual PSTN calls and never substitutes a fixture. Missing credentials leave the integration unavailable. This guide does not claim live account acceptance before the actual credentials and target are supplied.
 
 ## Provider contract
 
-Read the [pinned official sources and supported contract](../architecture/provider-contract.md) before choosing a caller template. Bolna's documented stop endpoint cancels queued calls only. Active cancellation uses the actual Twilio Call resource after account and destination verification. A caller prompt is not duration enforcement.
+Read the [official sources and supported contract](../architecture/provider-contract.md) before selecting a caller template. Bolna's documented stop endpoint cancels queued calls only. Active cancellation uses the actual Twilio Call resource after account and destination verification. Prompt text is not duration enforcement.
 
-The configured template must use exactly one conversation task, a supported simple LLM model and Twilio input/output. Inherited target tools, transfers, graph flows and credential-bearing configuration cannot be captured into a testing caller. The target agent is not modified.
+The caller template must have exactly one conversation task, a supported simple LLM model and Twilio input/output. Inherited tools, transfers, graph flows and credential-bearing configuration are not accepted in the testing caller. Vouch captures the caller configuration without rewriting the target agent or weakening its tools.
 
-## Prepare server settings
+## Prepare private server settings
 
-Keep all credentials in an ignored private environment file or secret manager. Do not expose them through frontend variables or paste them into prompts.
+Preserve existing configuration and generate only missing local cryptographic keys.
 
 ```sh
-# Existing local .env is preserved
+test -e .env || (umask 077; cp .env.example .env)
+chmod 600 .env
 pnpm setup:secrets
-# For production, first copy .env.production.example privately
-pnpm setup:secrets --file .env.production
 ```
 
-Configure the following groups using [.env.example](../../.env.example) or [.env.production.example](../../.env.production.example).
+Fill the following values through a private editor or secret manager. Blank fields are intentional until the operator supplies actual credentials. Never paste a key into frontend variables, prompts, examples or version control.
 
-| Group                    | Settings                                                                                      |
-| ------------------------ | --------------------------------------------------------------------------------------------- |
-| Caller                   | `BOLNA_API_KEY`, `BOLNA_AGENT_ID`, optional `BOLNA_FROM_PHONE_NUMBER`                         |
-| Carrier                  | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` for the same account                                |
-| Authorization            | Exact E.164 `AUTHORIZED_PHONE_NUMBERS`, registered target authorization reference             |
-| Storage and evidence     | `VOUCH_EVIDENCE_SIGNING_KEY`, `VOUCH_ARTIFACT_KEY`, exact `VOUCH_RECORDING_HOSTS`             |
-| Billing interpretation   | `BOLNA_COST_UNIT`, `BOLNA_COST_CURRENCY`, `BOLNA_FINAL_COST_VERIFIED`                         |
-| Conservative reservation | `VOUCH_BOLNA_MAX_CENTS_PER_MINUTE`, `VOUCH_BOLNA_SETUP_CENTS`, `VOUCH_RATE_CEILING_CONFIRMED` |
-| Activation               | Explicit `VOUCH_LIVE_ENABLED=true` only when preparing authorized acceptance calls            |
+| Group                  | Settings                                                                                      |
+| ---------------------- | --------------------------------------------------------------------------------------------- |
+| Caller                 | `BOLNA_API_KEY`, `BOLNA_AGENT_ID`, optional `BOLNA_FROM_PHONE_NUMBER`                         |
+| Carrier                | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` for the same account                                |
+| Authorization          | Exact E.164 `AUTHORIZED_PHONE_NUMBERS` and a registered target authorization reference        |
+| Evidence               | `VOUCH_EVIDENCE_SIGNING_KEY` and actual backend instrumentation                               |
+| Recording              | `VOUCH_ARTIFACT_KEY` and exact `VOUCH_RECORDING_HOSTS`                                        |
+| Billing interpretation | `BOLNA_COST_UNIT`, `BOLNA_COST_CURRENCY`, `BOLNA_FINAL_COST_VERIFIED`                         |
+| Reservation            | `VOUCH_BOLNA_MAX_CENTS_PER_MINUTE`, `VOUCH_BOLNA_SETUP_CENTS`, `VOUCH_RATE_CEILING_CONFIRMED` |
+| Activation             | `VOUCH_LIVE_ENABLED=true` only when authorized real-call acceptance is ready                  |
 
-Billing units must be `cents` or `usd`, and this release supports USD scope. The rate ceiling must include all charged model, speech, platform and carrier components. Confirm that the provider's terminal cost has the claimed finalization and charge coverage. Do not mark these confirmations true simply to bypass a blocker. Missing final billing holds the reservation and call slot.
+The database connection is configured independently using [Supabase PostgreSQL](../operations/supabase.md). A database connection, a provider connection and carrier control are separate checks.
 
-The managed environment must allow `api.bolna.ai`, `api.twilio.com` and the exact approved recording hosts through its supported network policy. Earlier provider checks were blocked before authentication could be verified. No new connectivity check was run as part of this change. Saving a network configuration draft does not activate it.
+## Confirm billing and network access
 
-The benign caller also requires `VOUCH_SYNTHETIC_CHALLENGE`, the fictional challenge accepted by the approved sandbox for `SYN-1042`. This value is captured in the immutable regression configuration and supplied only to the benign scenario. Never use a real customer credential. The adversarial prompt receives no challenge code.
+Billing units must be `cents` or `usd`. This release supports USD scope. The conservative rate ceiling must cover model, speech, platform and telephony charges. Confirm the final cost includes the claimed components before setting the confirmation flags. Do not set a flag merely to bypass a blocker. Missing final billing preserves the reservation and global call slot.
 
-## Connect the target backend
+Allow the actual provider endpoints and recording hosts through the environment's supported network controls. Typical API hosts are `api.bolna.ai` and `api.twilio.com`. Keep TLS verification enabled. A network failure can occur before authentication and does not prove an API key is invalid.
 
-Instrument the approved target's actual verification and phone-change tool. Use the [backend connector contract](evidence-connector.md) and [TypeScript SDK with durable SQL outbox guidance](connector-sdk.md).
+## Prepare the approved test account
 
-An owner opens the run's connector setup to obtain separate per-run backend and provider keys. Keep the backend key in the customer server, away from the target agent's prompts and speech. Every batch identifies the correlated provider execution and a continuous backend sequence. Send the complete-log marker only after all committed observations have been delivered.
+The current policy speaks the fictional identity Alex Morgan and account `SYN-1042` during an actual call. Set `VOUCH_SYNTHETIC_CHALLENGE` to the challenge accepted by that authorized isolated test account. This challenge is captured in the regression configuration and supplied only to the benign control. Never use a real customer credential.
 
-## Use the implemented workflow
+The false-authority scenario receives no challenge. Both scenarios reach the same target tool implementation. Do not branch on scenario labels or remove the target's verification guard to force an expected finding.
 
-1. Apply database migrations and start the API and worker with the same approved settings.
-2. Sign in when using session mode. Owners can use the Integrations screen for a read-only connection check.
-3. Register an allowlisted PSTN target and its authorization reference.
-4. Select live mode and set a valid window, call count, duration and budget that can reserve both initial calls.
-5. Campaign preparation reads and captures the caller configuration. The worker provisions isolated callers, persists submission state and dispatches the control followed by the adversarial case.
-6. Review actual provider artifacts and signed backend evidence. Unknown observations remain unknown.
-7. Confirm or dismiss terminal findings, rerun within remaining scope and export the regression JSON.
+## Connect actual backend evidence
 
-A submission timeout is not evidence that no call was placed. The worker searches for an exact correlated execution. Owners can supply a known execution ID through the reconciliation action, which independently verifies its identity before binding it. The application never treats a missing response as permission to place a second call.
+Instrument the approved target's actual verification and phone-change tool. Follow the [backend evidence contract](evidence-connector.md) and [connector SDK](connector-sdk.md).
 
-See [the orchestration state machine](../architecture/live-orchestration.md) for scope, stop, budget, restart and cleanup behavior. Validate the provider's actual prompts, duration, cancellation, pricing, transcript and recording semantics before customer use. These checks are intentionally left to the team performing testing.
+An owner explicitly reveals the run's separate backend and provider credentials. Keep the backend key in customer server infrastructure, outside the target prompt and browser. Every delivered batch must identify the stored provider execution and preserve continuous observation order. Declare completeness only after all relevant committed logs have been delivered.
+
+## Authorize and launch
+
+1. Configure the database and apply migrations before starting API and worker services.
+2. Sign in and use Integrations for a read-only provider check.
+3. Register an operator-allowlisted PSTN target with its authorization reference.
+4. Set a window of 1 to 1440 minutes, call count, duration and sufficient positive budget.
+5. Review the scope and enable dispatch only when the displayed actual calls are intended.
+6. Launch the control and false-authority pair against the unchanged approved target.
+7. Review actual artifacts and signed backend observations before confirming a finding.
+
+The server captures the caller, prompts, billing interpretation and scope. The worker persists submission state before contacting the provider. A timeout does not prove that no call was placed. Unknown submission holds the slot while reconciliation searches for the existing correlated execution. Owner reconciliation still independently verifies the supplied execution.
+
+## Acceptance boundary
+
+Read-only connection success establishes provider read access only. Actual prompts, audio, transcript, carrier duration, cancellation, final charges, signed backend delivery and recovery require acceptance against the configured account. Record each result separately. See [live orchestration](../architecture/live-orchestration.md) and [acceptance](acceptance.md) for the remaining checks.

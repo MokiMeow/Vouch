@@ -1,56 +1,43 @@
 # Vouch application flow
 
 ```mermaid
-flowchart LR
-    A[Landing page] --> B[Workspace]
-    B --> C[Approved target + bounded scope]
-    C --> D[PostgreSQL job queue]
-    D --> E[Synthetic caller + support target]
-    E --> F[Transcript + trusted backend events]
-    F --> G[Deterministic policy checks]
-    G --> H[Evidence and finding review]
-    H --> I[Versioned regression export]
-    H --> J[Same-config rerun]
-    J --> K{Window and call slots available?}
-    K -->|Yes| D
-    K -->|No| L[Request rejected]
-    D --> M[Isolated Bolna caller and Twilio controls]
-    M --> N[Approved PSTN target]
-    N --> O[Signed customer backend connector]
-    O --> F
-    M --> P[Encrypted real recordings]
-    P --> H
+flowchart TD
+    Browser[Browser and URL navigation state] --> Auth[Session and workspace access]
+    Auth --> API[Validated API]
+    API --> Store[(Supabase PostgreSQL)]
+    Store --> Worker[One active provider call across workers]
+    Worker --> Runtime[Isolated Bolna caller]
+    Runtime --> Carrier[Verified Twilio controls]
+    Carrier --> Target[Authorized PSTN target]
+    Target --> Backend[Customer verification and tool backend]
+    Backend --> Connector[Signed ordered evidence batches]
+    Connector --> Policy[Deterministic policy evaluator]
+    Runtime --> Artifacts[Actual transcript and encrypted recording]
+    Policy --> Store
+    Artifacts --> Store
+    Store --> Review[Human finding review]
+    Review --> Export[Evidence-backed regression export]
+    Review --> Rerun[Same configuration and remaining scope]
+    Rerun --> API
 ```
 
-The fixture path uses explicitly synthetic conversation and real fictional-account PostgreSQL writes/readbacks. The implemented live path uses a configured Twilio-backed Bolna caller, actual provider artifacts and signed customer backend events. Live activation and acceptance remain operator responsibilities; no successful live call is claimed. Browser speech replay is labelled separately from real recordings.
+Production views and execution exclude historical simulated records. There is no runtime fixture caller, manufactured transcript, browser speech substitution or demo seed. The controlled fictional identity used by the v1 policy remains an input to an actual authorized call, never proof that a call or backend action happened.
 
-## Component responsibilities
+| Component             | Responsibility                                                                        | Implementation                                  |
+| --------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Routing               | Preserve page, search, filter and return location through reload and Back             | `apps/web/src/main.tsx`, `shared/navigation.ts` |
+| Interface             | Landing, actual workspace records, evidence, review and public guides                 | `apps/web/src/pages/`, `features/`              |
+| Request lifecycle     | Cancel stale reads, poll active work and retain cached evidence on refresh failures   | `apps/web/src/shared/hooks/data.ts`             |
+| Global findings       | Search all owned conversations with literal matching, accurate total and bounded page | `apps/api/src/findings/list.ts`                 |
+| API and errors        | Validate scope, return field-specific errors and reject empty exports                 | `apps/api/src/server.ts`, `http/validation.ts`  |
+| Migration and storage | Verified PostgreSQL TLS, versioned SQL ledger and workspace isolation                 | `apps/api/src/database/`, `migrate.ts`          |
+| Worker                | Durable reservation, dispatch, deadlines, cancellation, reconciliation and cleanup    | `apps/api/src/worker.ts`, `execution/live.ts`   |
+| Provider              | Capture actual caller model and use documented Bolna/Twilio APIs                      | `apps/api/src/providers/bolna/`                 |
+| Evidence              | Authenticate backend observations, preserve order and evaluate trusted facts          | `apps/api/src/evidence/`, `packages/core/src/`  |
+| Artifacts             | Archive real audio, authenticated playback, privacy and retention                     | `apps/api/src/evidence/artifacts.ts`            |
 
-| Component           | Responsibility                                                                                                  | Implementation                            |
-| ------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| React interface     | Landing, campaign configuration, findings, evidence, review actions and public guides                           | `apps/web/src/features/` and `pages/`     |
-| Request lifecycle   | Cancel stale reads, coalesce requests, pause hidden-tab polling and preserve cached evidence on refresh failure | `apps/web/src/shared/hooks/data.ts`       |
-| Express API         | Validate requests, authorize scope, store snapshots, append reviews and serve exports                           | `apps/api/src/server.ts`                  |
-| PostgreSQL          | Persist targets, campaigns, runs, ordered events, account state and reviews                                     | `apps/api/src/migrate.ts`                 |
-| Worker              | Claim queued cases, enforce scope and global concurrency, isolate case failures                                 | `apps/api/src/worker.ts`                  |
-| Fixture             | Produce synthetic conversations and execute the same instrumented support tool for both scenarios               | `apps/api/src/execution/fixture.ts`       |
-| Evaluator           | Check trusted verification order, account correlation, forbidden execution and observed state                   | `packages/core/src/`                      |
-| Authentication      | Session resolution, owner/member access and workspace-bound database context                                    | `apps/api/src/auth/service.ts`            |
-| Live state machine  | Persist reservations, submission uncertainty, deadlines, cancellation and finalization                          | `apps/api/src/execution/live.ts`          |
-| Evidence connector  | Verify per-run signatures, order and completeness without trusting speech                                       | `apps/api/src/evidence/ingestion.ts`      |
-| Artifact archive    | Encrypt actual recordings and serve authenticated playback with retention/redaction                             | `apps/api/src/evidence/artifacts.ts`      |
-| Provider adapter    | Keep Bolna capabilities and read-only retrieval separate from domain rules                                      | `apps/api/src/providers/bolna/runtime.ts` |
-| HTTP asset boundary | Publish approved pages/assets while blocking repository notes, secrets and source maps                          | `apps/api/src/http/public-site.ts`        |
+The database owner/migrator applies the tracked SQL using a direct or session-pooler connection. The worker uses a session connection because it holds advisory locks; transaction pooling is unsupported. Every UI count comes from stored rows. An empty or unconfigured workspace stays empty or displays setup guidance.
 
-## A run from authorization to regression
+A run captures immutable scope and configuration before any submission. The worker persists an intent marker before the provider request, so an unknown outcome cannot create a duplicate call. Reruns consume remaining slots and recheck stop/window/budget rules. Human review appends history without changing the deterministic verdict. Exports require recorded call evidence and retain configuration integrity and provenance.
 
-1. The browser sends an approved target and scope to the API. Strict schemas validate the window, call slots, duration, budget, identity, categories and prohibited actions.
-2. The API freezes configuration, records its versioned hash and reserves the initial two case slots in PostgreSQL.
-3. The worker claims a case while holding the global concurrency lock. It rechecks authorization, scope, schedule, stop state and configuration integrity before executing.
-4. The verified control emits a trusted verification event before its tool action. The false-authority case requests the same tool without verification. Both use the same vulnerable fixture target.
-5. The fixture records ordered conversation and backend events, writes the fictional account and reads its resulting state independently.
-6. Pure evaluation checks the recorded facts. Spoken assertions cannot satisfy backend verification. Verdict, evidence tier and durable state outcome remain separate.
-7. The API returns persisted evidence to the workspace. Human confirmation or dismissal appends review history without replacing the deterministic result.
-8. Export includes captured configuration, policy, integrity metadata, events, verdict and reviews. Rerun retains that configuration, consumes a remaining slot and repeats scope checks.
-
-The live flow uses the provider runtime, authorized PSTN transport and customer evidence connector while preserving these boundaries. Actual account resource controls and artifact semantics require acceptance verification. See [project status](../project-status.md) for the remaining delivery sequence.
+Actual provider behavior, final billing coverage, remote database privileges and deployment recovery remain credential-dependent acceptance checks. See [project status](../project-status.md), [the provider contract](provider-contract.md) and [Supabase setup](../operations/supabase.md).

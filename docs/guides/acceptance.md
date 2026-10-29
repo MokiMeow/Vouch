@@ -1,32 +1,54 @@
 # Acceptance and implementation checklist
 
-The [original brief](../reference/product-brief.md) defines release acceptance. The [current handoff](../project-status.md) distinguishes implemented code from unperformed tests.
+The [original brief](../reference/product-brief.md) defines the product goal. The [current status](../project-status.md) records the implemented scope and verification results. Acceptance must distinguish a passing local check from an actual provider or database result.
 
-## Earlier fixture baseline
+## Real data boundary
 
-The previous release exercised campaign creation, real fictional-account PostgreSQL writes/readbacks, deterministic grading, human reviews, immutable configuration digests, bounded reruns and regression exports. It passed 60 unit tests, 168 PostgreSQL/HTTP assertions and three browser suites.
+Normal workspace flows use real registered targets, actual provider executions and persisted observations. Setup does not seed calls, findings, dashboard counters or transcripts. An empty workspace remains empty. Missing evidence stays unknown or unavailable rather than being generated to fill the interface.
 
-Those results predate the live/authentication expansion. They do not validate this new release.
+The current policy uses the isolated test identity Alex Morgan and account `SYN-1042` on an actual approved target. The `synthetic_challenge` method is a versioned test-account policy contract. These inputs do not replace real calls, signed backend instrumentation or actual state observations. Preserve the target's verification rules for both scenarios.
 
-## New implementation delivered
+## Checks available before provider credentials
 
-- Isolated Bolna scenario callers with captured configuration, model and actual dispatch code
-- Twilio account/recipient-verified cancellation and carrier duration controls
-- Durable reservations, deadlines, submission markers, restart recovery and unknown-outcome reconciliation
-- Signed per-run customer backend evidence with replay/sequence/completeness checks
-- Actual provider transcripts and encrypted recording archive/playback, owner redaction/deletion and artifact retry
-- Workspace authentication, owner/member access, CSRF and forced PostgreSQL tenant policies
-- Native Node production builds, nonroot containers, health/heartbeat checks, retention and guarded backup/restore
-- Updated UI and seven public guides exposing the supported workflow and its configuration gates
+1. Install the pinned dependencies and run type checking, the production build and unit checks.
+2. Verify placeholder configuration is rejected safely without printing secrets or connecting to a guessed database.
+3. Review ordered SQL migrations and their role requirements against the Supabase guide.
+4. Verify public routes, responsive layout, keyboard access and error states without presenting example product data.
+5. Exercise HTTP and database behavior only against an explicitly configured disposable test database.
+6. Record exact commands, results and blockers in the verification report.
 
-## Acceptance left to the user
+```sh
+pnpm install --frozen-lockfile
+pnpm build
+pnpm test
+```
 
-1. Review/update isolated test harness setup for the new authentication, tenant context and signed evidence contract.
-2. Verify unit, database, HTTP, browser, accessibility, security and operational behavior for the expanded implementation.
-3. Configure the supported real caller/carrier and explicitly authorized target.
-4. Validate both bounded spoken scenarios with actual audio, transcript, backend proofs and final all-component costs.
-5. Exercise hard duration, cancellation, stop, submission uncertainty, restart and concurrent-worker behavior.
-6. Review a real finding, rerun within scope and inspect its regression export.
-7. Build/deploy the containers behind HTTPS and exercise backup, restore, retention and workspace isolation.
+Database and browser suites require their documented test services and an isolated database. A controlled test payload is test evidence only. It must not appear as a real product call or imply provider acceptance. Never point destructive integration checks at retained workspace or customer data.
 
-No unit, integration, browser or real-call tests were run for this expansion, as requested. No public deployment, provider authentication, completed live call or recovery success is claimed. Additional transports and runtime providers remain optional future extensions.
+## Database acceptance after credentials
+
+1. Supply the actual Supabase PostgreSQL connection through private server configuration.
+2. Confirm verified TLS and an appropriate direct or session-pooler connection.
+3. Apply the versioned migrations using a schema-owning role with the required role-management permissions.
+4. Reapply migrations to confirm the ledger prevents silent replay or changed applied SQL.
+5. Verify sign-in, owner bootstrap, workspace membership and row-level isolation using separate test workspaces.
+6. Exercise backup and restore on an isolated destination with encryption keys available separately.
+
+See [Supabase PostgreSQL](../operations/supabase.md) for exact connection settings and privileges. PostgreSQL superuser access is not inherently required. Do not infer remote migration success from the presence of a connection placeholder.
+
+## Real call acceptance after authorization
+
+1. Configure the actual Bolna caller, same-account Twilio credentials and exact approved PSTN target.
+2. Verify read-only provider access and resolve every readiness blocker before enabling dispatch.
+3. Confirm all-component rates and final billing semantics from the actual account.
+4. Authorize a window of 1 to 1440 minutes with sufficient call slots, duration and budget.
+5. Run the control and false-authority scenario against the same unchanged target.
+6. Inspect actual audio, provider transcript, signed backend facts and final costs.
+7. Exercise stop, expiry, duration controls, ambiguous submission, restart and concurrent-worker behavior under separately approved scope.
+8. Review a supported terminal finding, rerun within remaining scope and inspect its regression export.
+
+An evidence-free export must return HTTP 409. Unknown submission must not trigger an automatic replacement call. Missing billing information must not be treated as zero cost. Missing recording or backend verification must not be converted into fabricated evidence.
+
+## Reporting results
+
+Record what actually ran and preserve relevant nonsecret output. Separate static checks, controlled database checks, browser checks and actual provider acceptance. Mark credential-dependent checks blocked until the real private values and authorization exist. No successful remote database migration, provider authentication, call, cancellation, final billing or recovery is established by this checklist itself.

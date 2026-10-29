@@ -6,7 +6,7 @@ This file applies to the entire repository. Read any more specific instructions 
 
 Vouch tests whether an authorized voice agent can be persuaded to skip a business-policy check. Findings must connect conversation to realized tool activity and backend evidence.
 
-The implementation includes a local synthetic fixture and a gated Twilio-backed Bolna PSTN workflow, with session authentication and PostgreSQL tenant isolation. Live dispatch is off by default and the expansion has not received acceptance tests. Do not describe implemented code as a verified provider integration or a production-certified service. See [project status](docs/project-status.md), [acceptance](docs/guides/acceptance.md) and the [original brief](docs/reference/product-brief.md).
+The product is real-data-only, with a gated Twilio-backed Bolna PSTN workflow, Supabase PostgreSQL, session authentication and tenant isolation. Never add production demo seeds, simulated callers or fabricated metrics. Live dispatch is off until credentials and provider controls are configured; isolated local regression tests do not establish hosted-provider acceptance. Do not describe implemented code as a verified provider integration or a production-certified service. See [project status](docs/project-status.md), [acceptance](docs/guides/acceptance.md) and the [original brief](docs/reference/product-brief.md).
 
 ## Code map
 
@@ -19,7 +19,6 @@ The implementation includes a local synthetic fixture and a gated Twilio-backed 
 - `apps/web/src/styles/tokens.css` and page CSS files define the visual system.
 - `apps/api/src/server.ts` owns HTTP validation, campaigns, reviews, reruns, exports and authenticated evidence ingestion.
 - `apps/api/src/worker.ts` processes the queue with concurrency and scope enforcement.
-- `apps/api/src/execution/fixture.ts` executes synthetic cases and records actual fictional-account changes.
 - `apps/api/src/campaigns/configuration.ts` owns captured configuration digests and integrity checks.
 - `apps/api/src/providers/bolna/` define provider contracts, captured caller configuration and Twilio control.
 - `apps/api/src/execution/live.ts` owns durable submission, budget, cancellation, reconciliation and isolated-caller cleanup.
@@ -27,7 +26,10 @@ The implementation includes a local synthetic fixture and a gated Twilio-backed 
 - `apps/api/src/evidence/ingestion.ts` and `apps/api/src/evidence/artifacts.ts` own signed ingestion, encrypted audio, provenance-preserving privacy and artifact recovery.
 - `apps/api/src/operations/retention.ts` and `apps/api/src/operations/health.ts` own bounded maintenance and safe operational signals.
 - `apps/api/src/http/public-site.ts` controls public HTTP pages and assets.
-- `apps/api/src/migrate.ts` owns repeatable SQL schema setup.
+- `apps/api/src/migrate.ts` applies checksummed versioned SQL from `database/migrations/`. Never modify applied migration SQL; add a new version.
+- `apps/api/src/findings/list.ts` owns global, tenant-scoped findings queries.
+- `apps/api/src/evidence/events.ts` owns normalized event persistence.
+- `packages/core/src/presentation.ts` is the shared source for visible run titles.
 - `packages/core/src/` owns strict schemas, limits, policies and pure deterministic evaluation.
 - `packages/connector/src/` provides customer-side backend evidence signing and delivery.
 - `scripts/` contains setup, production compilation, maintenance and backup/restore entry points. Browser verification and coverage tools live in `scripts/verification/`.
@@ -37,14 +39,14 @@ The implementation includes a local synthetic fixture and a gated Twilio-backed 
 
 ## Setup
 
-Use Node 24.19 or later, pnpm 11.25.0 and a running Docker daemon. Work in the existing checkout and preserve user edits and configuration.
+Use Node 24.19 or later and pnpm 11.25.0. Docker is required for isolated database regressions and optional container deployment, not hosted Supabase access. Work in the existing checkout and preserve user edits and configuration.
 
 ```sh
 pnpm install --frozen-lockfile
 test -e .env || (umask 077; cp .env.example .env)
 chmod 600 .env
 pnpm setup:secrets
-bash scripts/db-start.sh
+# Set actual Supabase placeholders before migration
 pnpm db:migrate
 pnpm dev
 ```
@@ -54,7 +56,7 @@ The cloud-specific install command is `bash scripts/cloud-install.sh`. Read [clo
 ## Invariants to preserve
 
 - Authorization, scope, target allowlists, scheduling, call slots, concurrency and stop rules are enforced by the server and worker. Model output cannot change them.
-- The fixture caller is deterministic and explicitly synthetic. Both scenarios use the same intentionally vulnerable target. Never fabricate a live recording from speech synthesis.
+- Runtime observations must come from actual provider calls or authenticated customer backend telemetry. Hide retained historical simulated records from product reads and execution; never delete user data as a setup shortcut. Isolated test inputs belong only in tests and must not be bundled or seeded into the website.
 - `change_contact_phone` requires prior trusted backend identity verification for the same account. Spoken claims and target-supplied text are untrusted evidence.
 - Grade transcript, requested tool, executed tool and backend state separately. Missing evidence stays unknown. A missing precondition requires an appropriately complete backend log.
 - Preserve recorded event sequence and account correlation. Do not mutate evaluator inputs.
@@ -77,7 +79,7 @@ Leave third-party copyright and license notices intact. Project code is MIT lice
 
 ## Design and content
 
-Maintain the developer-focused neutral and violet visual system, restrained surfaces, Geist fonts and Phosphor icons. Original mascot images remain non-draggable. Avoid dense descriptions and repeated boxes on the dashboard.
+Maintain the selected cool-white and electric-blue design, Geist fonts, Phosphor icons and the original ice-current background. Keep the decorative image in the top region so it does not reduce evidence readability. Do not reintroduce mascots or sample records. Avoid dense descriptions and repeated boxes on the dashboard.
 
 Support keyboard access, visible focus, reduced motion, readable contrast and widths from 320 to 2560 pixels. Docs opens in a separate tab from the workspace. Commands must be copyable and preserve configuration. Avoid em dashes and colons in new user-facing prose; required command, URL and data syntax is exempt.
 
@@ -89,20 +91,19 @@ Use `rg` for discovery. Keep domain logic pure, validate external input at bound
 pnpm build
 pnpm test
 pnpm test:integration
-# Requires a web build, running API/worker and Chromium
+# Requires a web build and Chromium, with no API/worker process needed
 pnpm test:browser
-pnpm test:browser:requests
 pnpm test:browser:design
 pnpm audit
 ```
 
-The live/auth expansion was delivered without running test suites by explicit user request. Earlier fixture test counts are historical, not acceptance of new code. Review harness authorization, signed-ingestion and database context before using those tests for release approval.
-
-Run checks relevant to the change. Integration tests reset only a dedicated database ending in `_test`; never point them at retained development or customer data. Browser suites create synthetic development records. `CHROMIUM_PATH` defaults to `/usr/bin/chromium`. Test output and coverage stay ignored unless a reviewed documentation asset is deliberately copied into `docs/assets/`.
+The latest user authorized end-to-end checks. Run meaningful isolated tests for behavioral changes. Integration regression creates a dedicated ephemeral PostgreSQL container and guarded `_test` database with provider credentials removed. Browser regression intercepts test-only records and makes no external calls. Never use retained development data or an actual customer database for automated setup or cleanup. The Supabase deployment and live carrier acceptance require actual credentials and must not be claimed from isolated tests.
 
 Record material changes and validation in [the action log](docs/history/action-log.md). Update acceptance and status when capabilities change. State what was actually verified and remaining limitations. Keep commits focused and preserve unrelated user work.
 
 ## Placement rules
+
+Use Supabase direct or session-pooler PostgreSQL connections with verified TLS. Transaction pooling on 6543 is unsupported because workers hold session advisory locks. Keep API keys and database connection strings in the ignored `.env`; commit placeholders only.
 
 Add API modules to the owning feature directory and keep only executable server, worker and migration entry points at `apps/api/src/` root. Keep provider details inside `providers/<provider>/`. Add frontend behavior under `features/<feature>/`, public pages under `pages/`, and reusable infrastructure under `shared/`. Avoid version suffixes and duplicate replacement files. Keep code next to its feature rather than creating miscellaneous helper folders.
 
