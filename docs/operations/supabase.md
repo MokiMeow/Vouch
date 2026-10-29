@@ -82,14 +82,15 @@ The migration entry point uses `DATABASE_MIGRATION_URL` when set, otherwise `DAT
 
 SQL lives under `apps/api/src/database/migrations`.
 
-| File               | Responsibility                                                                     |
-| ------------------ | ---------------------------------------------------------------------------------- |
-| `000_ledger.sql`   | Migration history with immutable SHA-256 digests                                   |
-| `001_base.sql`     | Targets, campaigns, runs, normalized events and reviews                            |
-| `002_live.sql`     | Provider execution state, reservations and caller cleanup                          |
-| `003_evidence.sql` | Signed evidence streams, receipts, privacy markers and encrypted-artifact metadata |
-| `004_auth.sql`     | Users, sessions, workspaces, restricted role, row-level policies and access grants |
-| `005_indexes.sql`  | Workspace history and run/review lookup indexes                                    |
+| File                         | Responsibility                                                                     |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `000_ledger.sql`             | Migration history with immutable SHA-256 digests                                   |
+| `001_base.sql`               | Targets, campaigns, runs, normalized events and reviews                            |
+| `002_live.sql`               | Provider execution state, reservations and caller cleanup                          |
+| `003_evidence.sql`           | Signed evidence streams, receipts, privacy markers and encrypted-artifact metadata |
+| `004_auth.sql`               | Users, sessions, workspaces, restricted role, row-level policies and access grants |
+| `005_indexes.sql`            | Workspace history and run/review lookup indexes                                    |
+| `006_service_heartbeats.sql` | Shared per-instance worker liveness with restricted writes and no seed records     |
 
 The runner verifies the name and digest of every applied migration before applying newer versions. SQL line endings are normalized to LF before SHA-256 hashing so a Windows checkout does not invalidate an unchanged migration. A changed historical file, missing source version or gap in the recorded history stops migration. Restore the exact original file and add a new numbered migration when schema behavior needs to change.
 

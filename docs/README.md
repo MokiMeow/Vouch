@@ -26,9 +26,12 @@ Start with [project status](project-status.md) for the implemented real PSTN wor
 
 ## Reports and history
 
+- [Functional UX follow-up](reports/functional-ux.md) records the guided first-use flow, real target persistence, campaign review, Stop confirmation and cross-container worker diagnostics.
+
 - [Current desktop report follow-up](reports/desktop-followup.md) records the reported fixes, selected design and isolated verification results.
 
-- [Repository audit](reports/repository-audit.md), [performance audit](reports/performance-audit.md) and [design verification](reports/design-qa.md) retain the historical fixture baseline. Their results are not acceptance of the later live/authentication expansion.
+- [Repository audit](reports/repository-audit.md) and [performance audit](reports/performance-audit.md) retain the historical fixture baseline. Their results are not acceptance of the later live/authentication expansion.
+- [Design verification](reports/design-qa.md) records the selected visual direction and its bounded local checks. The functional UX follow-up above records the later journey repairs.
 - [Design notes](reports/design-redesign.md) explain the current visual system and preserve creator/license references.
 - [Action history](history/action-log.md) records changes and their validation. Paths in older entries describe the layout at that time.
 - [Original brief](reference/product-brief.md) preserves the supplied text without edits.

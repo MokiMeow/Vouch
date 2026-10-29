@@ -85,7 +85,7 @@ For a native Node deployment, build the frontend and run `node scripts/build-ser
 
 ## Readiness and monitoring
 
-The API container checks the HTTP health route and PostgreSQL readiness. The worker container checks a heartbeat emitted after its processing loop. A missing heartbeat or one older than two minutes is unhealthy. A worker process merely existing is not treated as proof that it is making progress.
+The API container checks the HTTP health route and PostgreSQL readiness. Each worker records a per-instance heartbeat in PostgreSQL after a successful database tick and mirrors its identity into its local health file. The health command checks that instance against the database. Missing, failed or older-than-two-minute observations are unhealthy. Graceful shutdown marks the worker unavailable immediately. Integrations can therefore report worker health across containers without treating a local timestamp or process as proof of progress. These checks do not establish provider connectivity or completed calls.
 
 Monitor container health, migration failure, queue age, ambiguous provider dispatches, pending budget reservations, authentication failures, artifact disk usage and backup age. Structured operational logs contain event names and bounded operational metadata. Never log environment settings, raw provider responses, recordings or passwords.
 

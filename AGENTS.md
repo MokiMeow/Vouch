@@ -25,6 +25,8 @@ The product is real-data-only, with a gated Twilio-backed Bolna PSTN workflow, S
 - `apps/api/src/auth/service.ts` and `apps/api/src/database/client.ts` own sessions, CSRF, workspace context and restricted-role RLS.
 - `apps/api/src/evidence/ingestion.ts` and `apps/api/src/evidence/artifacts.ts` own signed ingestion, encrypted audio, provenance-preserving privacy and artifact recovery.
 - `apps/api/src/operations/retention.ts` and `apps/api/src/operations/health.ts` own bounded maintenance and safe operational signals.
+- `apps/api/src/operations/setup.ts` owns safe, authenticated setup diagnostics. Reuse the live readiness gate and never return credential values or raw driver errors.
+- `apps/web/src/features/workspace/WorkspaceSetup.tsx` owns the setup checklist and first-run guidance. Campaign scope/review and confirmed Stop live under `features/campaigns/`.
 - `apps/api/src/http/public-site.ts` controls public HTTP pages and assets.
 - `apps/api/src/migrate.ts` applies checksummed versioned SQL from `database/migrations/`. Never modify applied migration SQL; add a new version.
 - `apps/api/src/findings/list.ts` owns global, tenant-scoped findings queries.
@@ -68,6 +70,8 @@ The cloud-specific install command is `bash scripts/cloud-install.sh`. Read [clo
 - Isolated caller deletion may erase remote execution history. Never delete before required media/transcript capture or explicit privacy disposal, and preserve unresolved cleanup through retention.
 - Backend and provider signing keys are distinct. Only signed backend facts satisfy policy; completion requires contiguous delivery, and privacy tombstones must survive retries.
 - Keep runtime, target transport, optional speech components, evidence connectors and evaluation separate. Do not invent provider capabilities or endpoints.
+- A campaign review sends no request. Launch must use the reviewed values and require fresh authorization after editing. Stop requires confirmation. Preserve failed form input and guard duplicate submissions.
+- Worker health must come from recent successful database ticks stored in PostgreSQL. API and worker can run in separate containers; a local timestamp alone does not establish cross-service health.
 
 ## Secrets and public access
 
@@ -93,6 +97,7 @@ pnpm test
 pnpm test:integration
 # Requires a web build and Chromium, with no API/worker process needed
 pnpm test:browser
+pnpm test:browser:workflow
 pnpm test:browser:design
 pnpm audit
 ```

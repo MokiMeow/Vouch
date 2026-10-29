@@ -40,6 +40,8 @@ pnpm dev
 
 The landing page is `/`, the workspace is `/app` and the seven public guides start at `/docs`. Local development uses Vite port 5173 and API port 4000 on loopback. The app can render its honest setup state before credentials are supplied.
 
+Integrations opens a working setup checklist with safe server configuration checks, database/schema diagnostics and the worker's shared heartbeat. An empty connected workspace guides target registration before campaign setup. Saving a target opens its stored record in Targets. Campaigns have separate scope and review steps, and only the final authorized launch sends the request and opens the first run. Failed submissions preserve input, Stop requires confirmation, and filtered empty findings can reset the view.
+
 `scripts/cloud-install.sh` resolves its checkout from its own file path and can be invoked from any working directory. It preserves an existing private environment, installs dependencies and builds. It applies migrations only when a database connection is configured. It does not start Docker, populate provider keys or seed demo records.
 
 ## Configure Supabase
@@ -138,9 +140,11 @@ docker pull postgres:17-alpine
 pnpm test:integration
 # Uses actual built UI with intercepted records only inside the test process
 pnpm test:browser
+# Run just the campaign, setup and action workflow checks
+pnpm test:browser:workflow
 ```
 
-The API regression uses its own randomly named temporary PostgreSQL container and `_test` database. It never resets retained development or customer data, starts no worker and strips provider credentials. The browser regression uses test-only intercepted responses, never bundled demo data or database seeds. These fixtures are test inputs, not records displayed by the published application.
+The API regression uses its own randomly named temporary PostgreSQL container and `_test` database. It verifies a real user-entered target through the browser and runs a zero-job worker only before inserting report test records. It strips provider credentials, disables live calling and never resets retained development or customer data. Browser-only regressions use test-only intercepted responses, never bundled demo data or production database seeds. Test records are not displayed by the published application.
 
 Supabase connectivity, actual phone calls, carrier behavior, billing and hosted recovery cannot be certified before credentials are available. The [current status](docs/project-status.md) records the checks actually completed and their limits.
 
